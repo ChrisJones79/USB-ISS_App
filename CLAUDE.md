@@ -32,6 +32,6 @@ If any two of these conflict, stop and report the conflict. Never resolve it sil
 - Process files (`CLAUDE.md`, `docs/roles/*`, `.claude/commands/*`, `docs/templates/*`) change only together with an entry in `docs/process/CHANGES.md`.
 
 ## Conventions
-- Stack: TBD (see DECISIONS D-001).
+- Stack: Python 3.12 / PySide6 / pyserial / pytest (D-001, D-003)
 - Commit messages: `iter NN: <summary>`.
 - Add a new dependency only when `NEXT.md` or `DECISIONS.md` allows it.
