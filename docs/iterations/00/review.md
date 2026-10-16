@@ -1,6 +1,6 @@
 # Iteration 00 — Review (fix cycle 0)
 
-Model/effort: Opus 5.5, high · Reviewed commit: `997ac2b` on `iter/00` (code identical to `6afedc1 iter 00: bootstrap`; `997ac2b` is Chris's `.env` fix)
+Model/effort: Opus 5.5, high · Reviewed commit: `997ac2b` on `iter/00` (code identical to `6afedc1 iter 00: bootstrap`; `997ac2b` is Chris's `.env` fix). Merged tip: `889a365`, see "Late commit" below.
 
 ## Verdict
 **Accept**
@@ -42,7 +42,13 @@ Model/effort: Opus 5.5, high · Reviewed commit: `997ac2b` on `iter/00` (code id
 3. **minor — reading.** `SerialTransport(timeout=…)` is effectively ignored. `read()` always resets `self._ser.timeout` to its own default of 0.5 s, so the constructor value has no effect. Carried into NEXT 01.
 4. **minor — reading/test.** The runner's dirty flag is not very useful. Every untracked log makes the next run "dirty" (my hw log shows this: it is dirty only because of the mock log written one second earlier). Builder logs are taken before commit, so their header shows the *parent* commit (`926459c (dirty)`), and the log cannot identify the code that was tested. Carried into NEXT 01 (ignore `docs/iterations/*/logs/`, and record the porcelain status when dirty).
 5. **minor — test.** No test checks that the runner's exit code equals pytest's (mutation not caught). I verified it by reading: `return rc`. No action now.
-6. **process — reading. For Chris.** `.env` is **tracked in git**. Chris committed it in `926459c` and `997ac2b`, so the `.gitignore` entry has no effect. CLAUDE.md says `.env` "is not committed". It contains only the by-id device path, so nothing secret leaks, but the repo and CLAUDE.md disagree. I have not changed it. If Chris wants it untracked: `git rm --cached .env` and commit (the local file is kept).
+6. **process — reading. Resolved by Chris during the review.** `.env` was tracked in git: Chris committed it in `926459c` and `997ac2b`, so the `.gitignore` entry had no effect, and CLAUDE.md says `.env` "is not committed". Chris fixed this while the review was running (see "Late commit").
+
+## Late commit
+- `889a365 iter 00: stop tracking .env` (Chris, 23:52:31 UTC) landed on `iter/00` seven seconds after my test runs started. I did not see it until after the merge.
+- It only removes `.env` from the index. `git diff 997ac2b 889a365` touches nothing else, so the test results above apply to the merged code unchanged.
+- **Side effect of my merge, now repaired.** `main` still tracked `.env`, so `git checkout main` overwrote Chris's ignored local `.env`, and merging the deletion then removed it from disk. I recreated it from the `997ac2b` blob, which is the content I read at the start of the review. It is now present, ignored and untracked.
+- Process note: the reviewer should check that the branch tip still equals the reviewed commit just before merging, and check out `main` with care when a tracked file is becoming ignored.
 
 ## Scope drift
 None of substance. The extras are all reported in build.md and are reasonable:
