@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "usb-iss-app"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["pyserial"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["hw: needs a real USB-ISS on USB_ISS_PORT (run with --hw)"]
