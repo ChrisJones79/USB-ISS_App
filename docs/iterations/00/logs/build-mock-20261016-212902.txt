@@ -1,0 +1,73 @@
+command: scripts/run_tests.py --iter 00 --tag build
+pytest command: /home/chris/claude/USB-ISS_App/.venv/bin/python -m pytest -v -rA --junitxml=/home/chris/claude/USB-ISS_App/docs/iterations/00/logs/build-mock-20261016-212902.xml
+git commit: 926459c36afe7de5517c54b0af6fa90b5e1bb240 (dirty)
+python: 3.12.15
+pytest: 9.1.1
+pyserial: 3.5
+usb-iss-app: 0.0.0
+start (UTC): 2026-10-16T21:29:02.338782+00:00
+======================================================================
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0 -- /home/chris/claude/USB-ISS_App/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/chris/claude/USB-ISS_App
+configfile: pyproject.toml
+testpaths: tests
+collecting ... collected 21 items
+
+tests/test_hw.py::test_hw_version SKIPPED (hardware test; use --hw)      [  4%]
+tests/test_hw.py::test_hw_serial SKIPPED (hardware test; use --hw)       [  9%]
+tests/test_iss.py::test_version_mock_defaults PASSED                     [ 14%]
+tests/test_iss.py::test_version_request_bytes PASSED                     [ 19%]
+tests/test_iss.py::test_version_configurable PASSED                      [ 23%]
+tests/test_iss.py::test_version_short_response PASSED                    [ 28%]
+tests/test_iss.py::test_version_bad_module_id PASSED                     [ 33%]
+tests/test_iss.py::test_serial_mock_default PASSED                       [ 38%]
+tests/test_iss.py::test_serial_request_bytes PASSED                      [ 42%]
+tests/test_iss.py::test_serial_short_response PASSED                     [ 47%]
+tests/test_iss.py::test_serial_non_digit[1234567A] PASSED                [ 52%]
+tests/test_iss.py::test_serial_non_digit[1234567/] PASSED                [ 57%]
+tests/test_iss.py::test_serial_non_digit[1234567:] PASSED                [ 61%]
+tests/test_iss.py::test_serial_non_digit[\x001234567] PASSED             [ 66%]
+tests/test_iss.py::test_mock_unhandled_returns_nothing PASSED            [ 71%]
+tests/test_iss.py::test_mock_unhandled_then_valid PASSED                 [ 76%]
+tests/test_iss.py::test_mock_close PASSED                                [ 80%]
+tests/test_run_tests.py::test_unique_path_never_overwrites PASSED        [ 85%]
+tests/test_run_tests.py::test_hw_without_port_refuses PASSED             [ 90%]
+tests/test_transport.py::test_env_parser PASSED                          [ 95%]
+tests/test_transport.py::test_find_port_env_wins PASSED                  [100%]
+
+==================================== PASSES ====================================
+_____________________ test_mock_unhandled_returns_nothing ______________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:45 MockTransport: unhandled request 5a 02
+WARNING  usb_iss_app.mock:mock.py:45 MockTransport: unhandled request 40
+WARNING  usb_iss_app.mock:mock.py:45 MockTransport: unhandled request 00
+________________________ test_mock_unhandled_then_valid ________________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:45 MockTransport: unhandled request 5a 7f
+- generated xml file: /home/chris/claude/USB-ISS_App/docs/iterations/00/logs/build-mock-20261016-212902.xml -
+=========================== short test summary info ============================
+PASSED tests/test_iss.py::test_version_mock_defaults
+PASSED tests/test_iss.py::test_version_request_bytes
+PASSED tests/test_iss.py::test_version_configurable
+PASSED tests/test_iss.py::test_version_short_response
+PASSED tests/test_iss.py::test_version_bad_module_id
+PASSED tests/test_iss.py::test_serial_mock_default
+PASSED tests/test_iss.py::test_serial_request_bytes
+PASSED tests/test_iss.py::test_serial_short_response
+PASSED tests/test_iss.py::test_serial_non_digit[1234567A]
+PASSED tests/test_iss.py::test_serial_non_digit[1234567/]
+PASSED tests/test_iss.py::test_serial_non_digit[1234567:]
+PASSED tests/test_iss.py::test_serial_non_digit[\x001234567]
+PASSED tests/test_iss.py::test_mock_unhandled_returns_nothing
+PASSED tests/test_iss.py::test_mock_unhandled_then_valid
+PASSED tests/test_iss.py::test_mock_close
+PASSED tests/test_run_tests.py::test_unique_path_never_overwrites
+PASSED tests/test_run_tests.py::test_hw_without_port_refuses
+PASSED tests/test_transport.py::test_env_parser
+PASSED tests/test_transport.py::test_find_port_env_wins
+SKIPPED [2] tests/test_hw.py: hardware test; use --hw
+======================== 19 passed, 2 skipped in 0.11s =========================
+======================================================================
+exit code: 0
