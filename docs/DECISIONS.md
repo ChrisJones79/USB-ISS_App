@@ -23,3 +23,11 @@ Rationale: both Claude Code instances and Chris must run identical interpreters 
 
 ## D-004 · 2026-10-11 · adopted
 Card manifests are JSON (`card.json`). This avoids a YAML dependency, and the GUI card editor (F6) can write it using only the standard library.
+
+## D-005 · 2026-10-16 · pending claude1
+SPI SCK divisor rounding (clarifies SPEC §6 item 01, "SPI divisor calculators with error reporting"; datasheet p.10).
+- The divisor is `ceil(6000000 / SCK) - 1`, so the actual SCK (`6000000 / (divisor + 1)`) is never above the requested SCK.
+- Valid divisors are 1–255. The calculator never emits 0, because the datasheet says 0 behaves like 1. Requests above 3 MHz or below 23 437.5 Hz are refused.
+- The error from the requested SCK is reported, but no error limit is applied. F2's 3% limit applies to serial baud only.
+Rationale: an SPI device has a maximum clock, not a tolerance band. Rounding down in frequency can never overclock the device. Baud keeps the floor rule from SPEC §8.
+Proposed by revclaude while writing NEXT 01. Adopted only when claude1 confirms; until then iteration 01 builds to it.
