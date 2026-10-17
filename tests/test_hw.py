@@ -42,8 +42,9 @@ def test_hw_mode_sequence(hw):
         assert mode_byte("restore 5A 02 40 0A") == 0x40
 
 
-def test_hw_io_sequence(hw):
-    """NEXT 02 hardware sequence: no pin is ever an output; always restores I2C_S_100KHZ (0x40)."""
+@pytest.fixture
+def io_hw(hw):
+    """NEXT 02 hardware sequence helpers. No pin is ever an output; always restores I2C_S_100KHZ (0x40)."""
     def mode_byte(label):
         m = iss.version(hw).mode
         print(f"HW after {label}: mode=0x{m:02X} ({iss.decode_mode(m)})")
@@ -55,26 +56,37 @@ def test_hw_io_sequence(hw):
         print(f"HW {label} {frame.hex(' ')} raw response: {r.hex(' ') or '(none)'}")
         return r
 
-    try:
-        iss.set_mode(hw, iss.build_io_mode(0xAA))
-        assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
-        assert len(raw("GETPINS", iss.build_get_pins(), 2)) == 1
+    yield hw, mode_byte, raw
+    iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
+    assert mode_byte("restore 5A 02 40 AA") == 0x40
 
-        r = raw("SETPINS", bytes([0x63, 0x0F]), 2)
-        assert r in (b"\xff", b"\x00")
-        assert len(raw("GETPINS", iss.build_get_pins(), 2)) == 1
 
-        assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
+def test_hw_io_getpins_setpins(io_hw):
+    """NEXT 02 steps 1-2."""
+    hw, mode_byte, raw = io_hw
+    iss.set_mode(hw, iss.build_io_mode(0xAA))
+    assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+    assert len(raw("GETPINS", iss.build_get_pins(), 2)) == 1
+    assert raw("SETPINS", bytes([0x63, 0x0F]), 2) in (b"\xff", b"\x00")
+    assert len(raw("GETPINS", iss.build_get_pins(), 2)) == 1
 
-        iss.set_mode(hw, iss.build_io_mode(0xFF))
-        assert mode_byte("IO_MODE 5A 02 00 FF") == 0x00
-        for ch in range(1, 5):
-            v = iss.get_ad(hw, ch)
-            print(f"HW GETAD channel {ch}: {v}")
-            assert 0 <= v <= 1023
 
-        for ch in (0, 5):
-            assert raw(f"GETAD out-of-range {ch}", bytes([0x65, ch]), 3) == b"\x00\x00"
-    finally:
-        iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
-        assert mode_byte("restore 5A 02 40 AA") == 0x40
+def test_hw_io_getad_on_digital_pin(io_hw):
+    """NEXT 02 step 3: p.20 says 00 00 for a channel not set up as analogue."""
+    hw, mode_byte, raw = io_hw
+    iss.set_mode(hw, iss.build_io_mode(0xAA))
+    assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+    assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
+
+
+def test_hw_io_getad_analogue(io_hw):
+    """NEXT 02 steps 4-5."""
+    hw, mode_byte, raw = io_hw
+    iss.set_mode(hw, iss.build_io_mode(0xFF))
+    assert mode_byte("IO_MODE 5A 02 00 FF") == 0x00
+    for ch in range(1, 5):
+        v = iss.get_ad(hw, ch)
+        print(f"HW GETAD channel {ch}: {v}")
+        assert 0 <= v <= 1023
+    for ch in (0, 5):
+        assert raw(f"GETAD out-of-range {ch}", bytes([0x65, ch]), 3) == b"\x00\x00"
