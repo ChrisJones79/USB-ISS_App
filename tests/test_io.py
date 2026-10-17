@@ -293,3 +293,13 @@ def test_mock_serial_payload_5a01_is_data():
     assert iss.serial_io(m, B("5A 01")).ack
     assert bytes(m.serial_sent) == B("5A 01")
     assert m.read(3) == b""
+
+
+def test_mock_getad_non_general_pin_is_zero():
+    """NEXT 03 req 6: GETAD on a pin that is not general I/O returns 0."""
+    m = MockTransport(mode=0x40)
+    m.adc = [11, 22, 33, 44]
+    iss.set_mode(m, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
+    assert [iss.get_ad(m, c) for c in (1, 2, 3, 4)] == [11, 22, 0, 0]
+    iss.set_mode(m, iss.build_io_serial(9600, 0xAA))
+    assert [iss.get_ad(m, c) for c in (1, 2, 3, 4)] == [0, 0, 33, 44]
