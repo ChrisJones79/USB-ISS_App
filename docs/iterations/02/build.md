@@ -41,3 +41,27 @@ Requested findings (all from the hardware log):
 - **SETPINS with no output pins NACKs (`00`).** The datasheet is silent; this is now a finding. The mock ACKs (`FF`) here per NEXT req 4 ("answers FF"). Suggest the mock NACK when no general-I/O pin is an output, if you want it faithful.
 - **GETPINS reads 0F** with I/O1 supposedly driven by the module's TX and others floating; consistent with internal pull-ups (not tested further).
 - Ambiguity, p.19: TxCount is read as "bytes pending" per NEXT. Untested on hardware. The datasheet's behaviour when the receive buffer overflows is unspecified (mock drops extra bytes). SERIAL_IO framing without a length byte is assumed to be one `write()`.
+
+## Fix cycle 1
+
+Code commit `50e699e`; both final runs show `(clean)` at that commit.
+
+### Changes
+- `tests/test_hw.py::test_hw_io_getad_on_digital_pin`: sends `65 01` with all pins digital input, logs the raw response, asserts only 2 bytes decoding to 0–1023. Docstring rewritten (p.20 says `00 00`; the device does not).
+- Mock SETPINS: answers `00` when no general-I/O pin in the current mode is OUTPUT_LOW/OUTPUT_HIGH, else `FF`. Forced-NACK hook unchanged. Comment records the single hardware observation and that the rest is an assumption.
+- Mock GETAD: returns `adc[ch]` for digital-input and analogue-input general-I/O pins (comment cites SPEC §8). Output pins and I2C/serial pins keep `00 00` (comment: datasheet; untested on hardware). Channels outside 1–4 keep `00 00`.
+
+### Tests changed
+- `test_mock_setpins_no_outputs_acks` → renamed `test_mock_setpins_no_outputs_nacks`; now expects `IssNack` through `set_pins`. This is the new NACK-case test.
+- `test_mock_setpins_nack_hook`: now configures one output pin (it failed otherwise, since the second, unforced SETPINS now NACKs with no outputs). Added a check that the pin was set.
+- `test_mock_getad_digital_pin_is_zero` → renamed `test_mock_getad_digital_pin_returns_adc`; expects the ADC values on digital-input pins.
+- Added `test_mock_getad_output_pin_is_zero` (output pins still return 0).
+- No other test changed.
+
+### Test results
+- Mock: `logs/build-mock-20261017-225037.txt`: 160 passed, 6 skipped.
+- Hardware: `logs/build-hw-20261017-225037.txt`: 166 passed. `GETAD digital 65 01` raw response `02 e4`; device ends in 0x40 (restore line in every test).
+- Earlier logs kept. `build-mock-20261017-225022` is an intentional record of a failing run (`test_mock_setpins_nack_hook`, before I updated it); `build-mock-20261017-225029` and `build-hw-20261017-225029` were run on a dirty tree before committing, so they are not the final logs.
+
+### Deviations
+None.
