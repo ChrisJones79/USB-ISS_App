@@ -72,11 +72,13 @@ def test_hw_io_getpins_setpins(io_hw):
 
 
 def test_hw_io_getad_on_digital_pin(io_hw):
-    """NEXT 02 step 3: p.20 says 00 00 for a channel not set up as analogue."""
+    """NEXT 02 fix 1 req 1. Datasheet p.20 says 00 00 for a channel not set up as analogue;
+    the device does not do that (iteration 02 logs: 02 E1). Only the shape is asserted."""
     hw, mode_byte, raw = io_hw
     iss.set_mode(hw, iss.build_io_mode(0xAA))
     assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
-    assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
+    r = raw("GETAD digital", iss.build_get_ad(1), 3)
+    assert len(r) == 2 and 0 <= int.from_bytes(r, "big") <= 1023
 
 
 def test_hw_io_getad_analogue(io_hw):

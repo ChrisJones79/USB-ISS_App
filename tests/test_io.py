@@ -165,16 +165,18 @@ def test_mock_io_type_reapplied_resets_outputs():
 
 
 def test_mock_setpins_nack_hook():
-    m = io_mock(0xAA)
+    m = io_mock(iss.io_type(0, 2, 2, 2))  # one output pin, so an unforced SETPINS ACKs
     m.force_next_setpins_nack()
     with pytest.raises(iss.IssNack):
         iss.set_pins(m, 1)
     iss.set_pins(m, 1)  # one-shot
+    assert iss.get_pins(m) & 1 == 1
 
 
-def test_mock_setpins_no_outputs_acks():
+def test_mock_setpins_no_outputs_nacks():
     m = io_mock(0xAA)
-    iss.set_pins(m, 0x0F)
+    with pytest.raises(iss.IssNack):
+        iss.set_pins(m, 0x0F)
     assert iss.get_pins(m) == 0
 
 
@@ -188,10 +190,16 @@ def test_mock_getad():
     assert m.read(2) == B("00 00")
 
 
-def test_mock_getad_digital_pin_is_zero():
+def test_mock_getad_digital_pin_returns_adc():
     m = io_mock(iss.io_type(2, 2, 3, 3))
-    m.adc = [500, 500, 500, 500]
-    assert [iss.get_ad(m, c) for c in (1, 2, 3, 4)] == [0, 0, 500, 500]
+    m.adc = [500, 501, 502, 503]
+    assert [iss.get_ad(m, c) for c in (1, 2, 3, 4)] == [500, 501, 502, 503]
+
+
+def test_mock_getad_output_pin_is_zero():
+    m = io_mock(iss.io_type(0, 1, 2, 3))
+    m.adc = [500, 501, 502, 503]
+    assert [iss.get_ad(m, c) for c in (1, 2, 3, 4)] == [0, 0, 502, 503]
 
 
 def test_mock_general_pins_by_mode():

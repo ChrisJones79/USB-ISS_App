@@ -98,10 +98,12 @@ class MockTransport(Transport):
             self._force_setpins_nack = False
             self._rx.append(0x00)
             return
-        for pin in self._general_pins():
-            if self._pin_type(pin) in (iss.IoType.OUTPUT_LOW, iss.IoType.OUTPUT_HIGH):
-                self._out = self._out & ~(1 << pin) | (ss & (1 << pin))
-        self._rx.append(0xFF)
+        # Observed on hardware once (IO_MODE, all pins digital input, 63 0F -> 00); the other cases are an assumption.
+        outputs = [p for p in self._general_pins()
+                   if self._pin_type(p) in (iss.IoType.OUTPUT_LOW, iss.IoType.OUTPUT_HIGH)]
+        for pin in outputs:
+            self._out = self._out & ~(1 << pin) | (ss & (1 << pin))
+        self._rx.append(0xFF if outputs else 0x00)
 
     def _getpins(self) -> int:
         # ASSUMPTION: bits for pins that are not general I/O, or are analogue inputs, read 0.
@@ -115,9 +117,12 @@ class MockTransport(Transport):
         return v
 
     def _getad(self, ch: int) -> bytes:
-        """GETAD, p.20: 00 00 unless the channel is a general-I/O analogue input."""
-        if 1 <= ch <= 4 and ch - 1 in self._general_pins() and self._pin_type(ch - 1) == iss.IoType.ANALOGUE_INPUT:
+        """GETAD, p.20, following the device (SPEC §8 erratum)."""
+        # p.20 says 0000 for a digital input; device fw 0x09 converts anyway (SPEC §8).
+        if (1 <= ch <= 4 and ch - 1 in self._general_pins()
+                and self._pin_type(ch - 1) in (iss.IoType.DIGITAL_INPUT, iss.IoType.ANALOGUE_INPUT)):
             return bytes([self.adc[ch - 1] >> 8, self.adc[ch - 1] & 0xFF])
+        # Output pins and I2C/serial pins: datasheet; untested on hardware. Channels outside 1-4: confirmed on hardware.
         return b"\x00\x00"
 
     def force_next_mode_nack(self, reason: int) -> None:
