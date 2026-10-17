@@ -7,6 +7,7 @@ import datetime as dt
 import importlib.metadata as md
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,21 @@ def unique_paths(logdir: Path, tag: str, kind: str, stamp: str) -> tuple[Path, P
 def git(*args: str) -> str:
     r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
     return r.stdout.strip()
+
+
+LOG_PATH = re.compile(r"^docs/iterations/[^/]+/logs/")
+
+
+def dirty_lines() -> list[str]:
+    """`git status --porcelain` lines, minus files under docs/iterations/*/logs/."""
+    # not git(): its strip() would eat the leading space of the first status line
+    r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"],
+                       cwd=ROOT, capture_output=True, text=True)
+    return filter_porcelain(r.stdout.splitlines())
+
+
+def filter_porcelain(lines: list[str]) -> list[str]:
+    return [ln for ln in lines if not LOG_PATH.match(ln[3:].split(" -> ")[-1].strip('"'))]
 
 
 def pkg_version(name: str) -> str:
@@ -68,7 +84,7 @@ def main() -> int:
     if port:
         env["USB_ISS_PORT"] = port
 
-    dirty = bool(git("status", "--porcelain"))
+    dirty = dirty_lines()
     header = [
         f"command: {' '.join(sys.argv)}",
         f"pytest command: {' '.join(cmd)}",
@@ -78,6 +94,9 @@ def main() -> int:
         f"pyserial: {pkg_version('pyserial')}",
         f"usb-iss-app: {pkg_version('usb-iss-app')}",
     ]
+    if dirty:
+        header.append("git status --porcelain:")
+        header += [f"  {ln}" for ln in dirty]
     if args.hw:
         header.append(f"port: {port}")
     header.append(f"start (UTC): {start.isoformat()}")

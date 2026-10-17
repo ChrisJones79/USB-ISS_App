@@ -67,7 +67,7 @@ def test_serial_non_digit(bad):
 
 
 def test_mock_unhandled_returns_nothing(mock):
-    mock.write(bytes.fromhex("5A 02 40 00"))  # ISS_MODE not implemented
+    mock.write(bytes.fromhex("5A 10 40 00"))  # no such sub-command (was ISS_MODE before iter 01)
     assert mock.read(8) == b""
     assert mock.unhandled
 
