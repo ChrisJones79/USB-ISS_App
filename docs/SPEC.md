@@ -116,10 +116,12 @@ cards/gy-mcu90640/
 - The driver reads the MLX90640 directly, at I2C address 0x33.
 - Blocked on two things:
   - the Melexis MLX90640 datasheet (EEPROM calibration and RAM map), which is not yet in `reference/`;
-  - confirming the module's I2C logic levels at a 5 V supply.
+  - confirming the module's I2C logic levels. The module's logic is 3.3 V whatever VIN is: TX measured at 3.3 V with VIN = 5 V.
 
 **Power.**
-- The module draws 42 mA, so it **requires the USB-ISS 5 V link**. The 3.3 V supply is limited to 30 mA.
+- The module draws 42 mA, more than the USB-ISS 3.3 V supply can give (30 mA). Its logic is 3.3 V regardless of VIN.
+- Supported setup: USB-ISS at 3.3 V (power link removed) so logic levels match; module VIN from a separate 3–5 V supply; grounds shared; USB-ISS VCC pin unconnected (datasheet p.3).
+- Do not run the USB-ISS at 5 V with this module. Its 5 V TX would drive the module's 3.3 V RX, and the module's 3.3 V TX may not reliably read as high at the USB-ISS's 5 V input.
 
 ## 6. Roadmap
 Each item is roughly one iteration. revclaude may split an item, but must not merge two.
@@ -133,19 +135,19 @@ Each item is roughly one iteration. revclaude may split an item, but must not me
   - All modes, the IO_TYPE builder, the baud and SPI divisor calculators with error reporting, and NACK parsing.
 - **02. SERIAL_IO and I/O commands**
   - SERIAL_IO, SETPINS, GETPINS and GETAD, with buffer limits enforced (30-byte TX, 62-byte RX).
-- **03. I2C and SPI commands**
-  - I2C_SGL, I2C_AD0/1/2, I2C_DIRECT, I2C_TEST and SPI, with frame limits enforced.
-- **04. Minimal GUI**
+- **03. I2C commands**: I2C_SGL, I2C_AD0/1/2 and I2C_TEST, with frame limits enforced (D-006). Split by revclaude, iteration 02.
+- **04. I2C_DIRECT and SPI**, with frame limits enforced.
+- **05. Minimal GUI**
   - Features F1, F2 and F4.
-- **05. Card framework**
+- **06. Card framework**
   - Manifest schema and validation, the loader, the card host, and mode activation (F5).
-- **06. GY-MCU90640 card, serial driver**
+- **07. GY-MCU90640 card, serial driver**
   - Frame parser, checksum, commands and device mock.
   - Hardware test: read one frame in query mode.
-- **07. GY-MCU90640 panel**
+- **08. GY-MCU90640 panel**
   - Heatmap and device settings.
-- **08. I/O panel (F3)**
-- **09. Card editor (F6)**
+- **09. I/O panel (F3)**
+- **10. Card editor (F6)**
 - **Later:** GY-MCU90640 `i2c_direct`; more cards.
 
 ## 7. Out of scope (v1)
@@ -158,5 +160,10 @@ Each item is roughly one iteration. revclaude may split an item, but must not me
 - **Baud formula (USB-ISS datasheet p.8).** The text prints `48000000/(16+baud)`. The correct formula is `48000000/(16*baud) - 1`, which matches the worked example and the table. Use floor, which matches every table row (19200 gives 155, 9600 gives 311). The actual rate is `48000000/(16*(divisor+1))`.
 - **Baud table error (p.8).** The 2400 row lists bytes `0x09 0xE1`, which is 2529. The divisor 1249 is `0x04 0xE1`. Trust the formula, not that row. Add a unit test for it.
 - **IO_CHANGE response (resolved).** On hardware, IO_CHANGE in I2C_S_100KHZ returns `FF 00` and leaves the ISS_VERSION mode byte unchanged (iteration 01 hardware logs, firmware 0x09).
-- **GETAD on a digital-input pin (erratum, p.20).** The datasheet says a channel that is not set up as analogue returns `0000`. Firmware 0x09 returns the ADC conversion when the pin is a general-I/O digital input. Two units show this, each power-cycled, with nothing attached and the test run alone: serial 00069221 gave `03 D4` (`claude1-discriminator-hw.txt`), and serial 00069220 gave `03 FF` (`claude1-discriminator-hw-unit2.txt`); both logs are in `docs/iterations/02/logs/`. Other firmware versions are unknown. Earlier values (737–742) came from runs with the GY module attached. Out-of-range channels (0, 5) do return `0000`, as documented. GETAD on output pins and on I2C/serial pins is untested.
+- **GETAD on a digital-input pin (erratum, p.20).** The datasheet says a channel that is not set up as analogue returns `0000`. Firmware 0x09 returns the ADC conversion when the pin is a general-I/O digital input. Evidence:
+  - **Runner logs.** In 7 of the 8 iteration-02 runner hardware logs, GETAD on I/O1 (digital input) is non-zero. The one `00 00` is consistent with sampling while the module's TX was low (revclaude, iteration 02 fix review).
+  - **Unit 1 alone, after a power-cycle, module attached:** `02 E6`, recorded in `claude1-discriminator-hw.txt` as of commit a181b31. That file was later overwritten. The current version contains a failed run, not evidence.
+  - **Unit 2** (`claude1-discriminator-hw-unit2.txt`): firmware 0x09, `03 FF`. The log has no runner header. That the unit was serial 00069220 with nothing attached is Chris's statement, not something the log shows.
+  - **Unit 1, nothing attached:** `03 D4`, as reported by Chris. The log was lost to the overwrite.
+  - Out-of-range channels (0, 5) do return `0000`, as documented. GETAD on output pins and on I2C/serial pins is untested. Other firmware versions are unknown.
 - **SETPINS with no output pins (p.20, unspecified).** In IO_MODE with all pins digital input, `63 0F` returns `00` (NACK) (iteration 02 hardware logs).
