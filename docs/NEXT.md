@@ -1,111 +1,145 @@
-# NEXT — Iteration 01 (fix cycle 0)
+# NEXT — Iteration 02 (fix cycle 0)
 
 Recommended model/effort: Sonnet 5.5, medium.
-Author: revclaude. Read `docs/iterations/00/review.md` first; requirements 6–8 carry over from it.
+Author: revclaude. Read `docs/iterations/01/review.md` first; requirement 6 carries over from it.
 
 ## Context
-Iteration 00 was accepted (`iter-00`). Transport, mock, runner, ISS_VERSION and GET_SER_NUM are in place. This iteration adds **ISS_MODE**: every mode frame, the IO_TYPE builder, the baud and SPI divisor calculators, mode-byte decoding, and NACK parsing (SPEC §6 item 01, SPEC F2, SPEC §8).
+Iteration 01 was accepted (`iter-01`). ISS_MODE, IO_TYPE, the divisor calculators, NACK parsing and the mock's ISS_MODE framing are in place. This iteration adds the **SERIAL_IO** command and the three **I/O commands** SETPINS, GETPINS and GETAD, with the serial buffer limits enforced (SPEC §6 item 02, SPEC F3; datasheet pp.19–20).
 
 ## Goal
-`usb_iss_app.iss` can build every ISS_MODE frame in the datasheet, compute and validate baud and SPI divisors, and parse the 2-byte mode response including NACK reasons. The mock emulates ISS_MODE with correct frame lengths. On hardware, a safe input-only mode sequence passes and records how IO_CHANGE responds.
+`usb_iss_app.iss` can build and parse SERIAL_IO, SETPINS, GETPINS and GETAD, and refuses frames that break the datasheet limits. The mock emulates all four commands, including the pin state each mode implies. On hardware, a safe input-only sequence passes and records the raw GETPINS, SETPINS and GETAD responses.
 
 ## Requirements
 
-### 1. Mode values and decoding (datasheet p.6)
-- Constants for every operating mode:
-  - IO_MODE 0x00, IO_CHANGE 0x10;
-  - I2C_S_20KHZ 0x20, I2C_S_50KHZ 0x30, I2C_S_100KHZ 0x40, I2C_S_400KHZ 0x50;
-  - I2C_H_100KHZ 0x60, I2C_H_400KHZ 0x70, I2C_H_1000KHZ 0x80;
-  - SPI_MODE 0x90 with phase 0–3 (0x90–0x93, p.10);
-  - SERIAL 0x01, combinable with IO_MODE (p.8) and with all 7 I2C modes (p.9). For example, 0x61 is I2C_H_100KHZ + SERIAL.
-- `decode_mode(b: int) -> str` names the mode byte reported by ISS_VERSION, for example `"I2C_S_100KHZ"`, `"I2C_H_100KHZ+SERIAL"`, `"IO_MODE+SERIAL"` or `"SPI_MODE phase 2"`.
-  - An unknown byte returns `"UNKNOWN(0xNN)"` and does not raise, because ISS_VERSION can report state we have not seen yet.
+### 1. Command constants and limits (datasheet pp.19–20)
+- `SERIAL_IO = 0x62`, `SETPINS = 0x63`, `GETPINS = 0x64`, `GETAD = 0x65`.
+- `SERIAL_TX_MAX = 30` and `SERIAL_RX_MAX = 62`: the transmit and receive buffer sizes (p.19).
 
-### 2. IO_TYPE builder (datasheet p.7)
-- `IoType` enum: OUTPUT_LOW 0b00, OUTPUT_HIGH 0b01, DIGITAL_INPUT 0b10, ANALOGUE_INPUT 0b11.
-- `io_type(io1, io2, io3, io4) -> int`, with pin 1 in bits 1:0 and pin 4 in bits 7:6.
-- Test against the datasheet examples: 0x01 (I/O1 high, the rest low) and 0xB4.
-
-### 3. Divisor calculators (SPEC F2, SPEC §8, datasheet pp.8 and 10; D-005)
-- `baud_divisor(bps) -> (divisor, actual_bps, error_pct)`:
-  - `divisor = floor(48000000 / (16 * bps)) - 1`;
-  - `actual = 48000000 / (16 * (divisor + 1))`;
-  - `error_pct = (actual - bps) / bps * 100`.
-  - Follow SPEC §8: the printed formula on p.8 is wrong. Do not implement `16+baud`.
-- The serial frame builders raise `ValueError` if |error| > 3 % or if the divisor is outside 0–65535.
-- `spi_divisor(sck_hz) -> (divisor, actual_hz, error_pct)` follows D-005 (pending claude1): `ceil(6000000 / sck) - 1`, valid range 1–255, `ValueError` outside it.
+### 2. SERIAL_IO (datasheet p.19)
+- `build_serial_io(data: bytes = b"") -> bytes` returns `62` followed by `data`.
+  - `ValueError` if `len(data) > 30`.
+  - An empty `data` is valid: it is the receive poll (p.19, last paragraph).
+- `parse_serial_io_header(resp) -> (ack: bool, tx_count: int, rx_count: int)` reads the first 3 response bytes:
+  - fewer than 3 bytes → `IssTimeout`;
+  - first byte `FF` → `ack=True`; `00` → `ack=False`; any other value → `IssProtocolError`;
+  - `tx_count > 30` or `rx_count > 62` → `IssProtocolError`.
+- `serial_io(transport, data=b"") -> SerialIoResult(ack, tx_count, rx)`:
+  - writes the frame, reads 3 bytes, parses them, then reads `rx_count` bytes;
+  - fewer than `rx_count` bytes → `IssTimeout`;
+  - **a NACK does not raise.** p.19 says a NACK only means the transmit buffer has no room and the caller should retry. p.19 also says "always read these three bytes first", then RxCount bytes. So on a NACK the function still reads and returns any received bytes. Losing them would corrupt the serial stream. Add a comment that this reading of p.19 is our interpretation.
 - Tests:
-  - every row of the p.8 baud table, with 2400 expected as **0x04 0xE1** (SPEC §8);
-  - 115200 → divisor 25, actual 115385 (rounded), error +0.16 %;
-  - 460800 refused;
-  - SPI: 3 MHz → 1, 500 kHz → 11, 23437.5 Hz → 255; 4 MHz and 20 kHz refused.
+  - exact frame bytes for an empty poll and for a 30-byte payload;
+  - 31 bytes refused;
+  - every header error above;
+  - an ACK with 0 and with 62 rx bytes;
+  - a NACK that still carries rx bytes;
+  - an rx body shorter than `rx_count` → `IssTimeout`.
 
-### 4. ISS_MODE frames and response (datasheet pp.6–10)
-Pure builders. The expected bytes are the datasheet examples:
+### 3. SETPINS, GETPINS, GETAD (datasheet p.20)
+- **SETPINS:**
+  - `build_set_pins(states)` returns `63 ss`: I/O1 in bit 0 … I/O4 in bit 3. `ValueError` unless 0 ≤ states ≤ 0x0F, because bits 7:4 are "X".
+  - `parse_set_pins(resp)`:
+    - `FF` → OK;
+    - `00` → `IssNack` with `.reason = None` and a message naming SETPINS;
+    - any other byte → `IssProtocolError`;
+    - empty → `IssTimeout`.
+  - Extend `IssNack` to accept `reason=None`, without changing its ISS_MODE behaviour or iteration 01's tests.
+  - `set_pins(transport, states)`.
+- **GETPINS:**
+  - `build_get_pins()` returns `64`.
+  - `parse_get_pins(resp) -> int` returns `resp[0] & 0x0F`. Bits 7:4 are don't-care, so they are masked, not treated as an error. Empty → `IssTimeout`.
+  - `get_pins(transport)`.
+- **GETAD:**
+  - `build_get_ad(channel)` returns `65 cc`. `ValueError` unless 1 ≤ channel ≤ 4.
+  - `parse_get_ad(resp) -> int` decodes a big-endian 16-bit value. Fewer than 2 bytes → `IssTimeout`. A value > 1023 → `IssProtocolError`, because the converter is 10-bit (p.20).
+  - `get_ad(transport, channel)`.
+- Tests:
+  - exact frame bytes for each builder;
+  - the p.20 GETAD examples `02 A6` → 678 and `00 3D` → 61;
+  - `03 FF` → 1023 accepted; `04 00` → `IssProtocolError`;
+  - GETPINS `F5` → `0x05`;
+  - every error path above.
 
-| Builder | Frame | Datasheet example |
-|---|---|---|
-| `build_io_mode(io_type)` | `5A 02 00 tt` | `5A 02 00 B4` (p.7) |
-| `build_io_change(io_type)` | `5A 02 10 tt` | `5A 02 10 B4` (p.7) |
-| `build_io_serial(bps, io_type)` | `5A 02 01 hi lo tt` | 19200, 0xB0 → `5A 02 01 00 9B B0` (p.8) |
-| `build_i2c_mode(mode, io_type)` | `5A 02 mm tt` | `5A 02 60 04` (p.9) |
-| `build_i2c_serial(mode, bps)` | `5A 02 (mm\|01) hi lo` | I2C_H_100KHZ, 19200 → `5A 02 61 00 9B` (p.9) |
-| `build_spi_mode(phase, sck_hz)` | `5A 02 (90\|phase) dd` | 3 MHz → `5A 02 90 01` (p.10) |
+### 4. Mock: I/O state (SPEC §3, "the mock"; datasheet pp.3, 7, 20)
+- The mock tracks the current IO_TYPE byte. IO_MODE, IO_CHANGE, I2C_MODE and IO_MODE+SERIAL set it. I2C+SERIAL and SPI frames carry no IO_TYPE and leave it unchanged.
+- At construction it is `0xAA` (all digital input). Changelog v7 (p.2) says I/O1 and I/O2 power up as inputs. Mark this as an assumption for I/O3 and I/O4.
+- The mode decides which pins are general I/O (pin table, p.3):
 
-- Builders reject arguments that are not I2C modes or phases outside 0–3 with `ValueError`.
-- `parse_mode_response(resp)` (p.6):
-  - `FF 00` → OK;
-  - `FF xx` with xx ≠ 0 → `IssProtocolError`;
-  - `00 rr` with rr ∈ {05 Unknown command, 06 Internal Error 1, 07 Internal Error 2} → new `IssNack(IssError)` carrying `.reason` and a readable name;
-  - `00` followed by any other byte, or any other first byte → `IssProtocolError`;
-  - fewer than 2 bytes → `IssTimeout`.
-- `set_mode(transport, frame)` writes the frame, reads 2 bytes and parses them.
-- Each unit test asserts the exact frame bytes.
+  | Mode | General I/O pins |
+  |---|---|
+  | IO_MODE | 1–4 |
+  | IO_MODE+SERIAL | 3, 4 |
+  | I2C | 1, 2 |
+  | I2C+SERIAL | none |
+  | SPI | none |
 
-### 5. Mock ISS_MODE (SPEC §3, "the mock"; fixes review 00 issue 1)
-- The mock frames `5A 02 <mode> …` by the mode byte's length:
-  - IO_MODE, IO_CHANGE, I2C and SPI: 4 bytes;
-  - I2C+SERIAL: 5 bytes;
-  - IO_MODE+SERIAL: 6 bytes.
-- It waits for the whole frame before acting. Bytes inside a frame are never interpreted as commands. Test: `5A 02 01 5A 01 B0` (a valid IO+SERIAL frame with divisor 0x5A01) yields exactly `FF 00` and no version reply.
-- A valid frame → `FF 00`, and the mock's `mode` becomes the frame's mode byte, so ISS_VERSION reports it.
-  - IO_CHANGE leaves `mode` unchanged. That is an assumption until requirement 9 reports hardware behaviour. Mark it in a comment.
-- An unknown mode byte → `00 05` after consuming `5A 02 <mode>`.
-  - This framing is an assumption, not verified on hardware. Mark it in a comment.
-- Add a test-only hook to force the next mode response to NACK with a given reason (06, 07), so `IssNack` is tested end to end through `set_mode`.
-- Unknown `5A xx` sub-commands and non-`5A` bytes behave as in iteration 00: dropped, logged, no reply.
+  IO_TYPE bits for pins that are not general I/O are ignored.
+- Test-settable inputs: `inputs` (4-bit levels seen on digital-input pins) and `adc` (four raw 0–1023 values).
+- **Outputs:**
+  - A general-I/O pin typed OUTPUT_LOW or OUTPUT_HIGH starts at that level whenever IO_TYPE is applied.
+  - SETPINS changes the levels of output pins only (p.20) and answers `FF`.
+  - Add a test-only hook to make the next SETPINS answer `00`, so `IssNack` is tested end to end through `set_pins`.
+- **GETPINS** answers one byte. Bit n is the level of a general-I/O output pin, or the `inputs` level of a general-I/O digital-input pin. Every other bit is 0, which is an assumption: mark it in a comment.
+- **GETAD** answers `adc[ch-1]` as 2 bytes only when the channel is 1–4 and that pin is a general-I/O analogue input. Otherwise it answers `00 00` (p.20).
 
-### 6. Default timeout test (review 00 issue 2)
-Add a test that fails if the default read timeout is not 0.5 s (datasheet p.11).
+### 5. Mock: SERIAL_IO (SPEC §3; datasheet p.19)
+- **Framing.** SERIAL_IO has no length byte. The real device delimits it by the USB transfer. The mock treats a `62` frame as running from the `62` to the end of the `write()` call in which it arrived. Mark this as an assumption.
+- **Serial modes** (0x01 and I2C+SERIAL):
+  - The mock keeps a transmit buffer of at most 30 bytes.
+  - If the payload fits in the free space, the bytes are accepted and the reply is `FF`. Otherwise nothing is accepted and the reply is `00`.
+  - Accepted bytes drain at once into a test-visible `serial_sent`, unless a test-only `hold_serial_tx` flag is set. With the flag set they stay pending, so a test can fill the buffer and see the NACK.
+  - TxCount is the number of bytes still pending.
+- **Receive buffer:** at most 62 bytes, filled by a test-only `inject_serial_rx(data)`.
+  - The mock drops bytes beyond 62 and logs them, because overflow behaviour is unspecified. Mark this as an assumption.
+  - Every SERIAL_IO reply, ACK or NACK, carries RxCount and all buffered rx bytes, then clears the buffer.
+- **Other modes:** a `62` frame is dropped and logged as unhandled, with no reply. The datasheet does not say what happens. Mark this as an assumption.
+- Tests (through `serial_io`):
+  - poll with nothing to receive → `(True, 0, b"")`;
+  - send 30 bytes → `serial_sent` gets exactly those bytes;
+  - with `hold_serial_tx`: 20 bytes, then 11 bytes → NACK, `tx_count == 20`, and the 11 bytes are not accepted;
+  - inject 70 rx bytes → one poll returns exactly 62 bytes;
+  - a NACK reply still carries injected rx bytes;
+  - SERIAL_IO in I2C_S_100KHZ → `IssTimeout`, and the frame appears in `unhandled`;
+  - a payload containing `5A 01` is sent as data and does not trigger an ISS_VERSION reply.
 
-### 7. SerialTransport timeout (review 00 issue 3)
-The `timeout` passed to `SerialTransport(...)` must take effect when `read()` is called without a timeout. Keep 500 ms as the default.
-
-### 8. Runner dirty flag (review 00 issue 4)
-- Exclude files under `docs/iterations/*/logs/` when computing the dirty flag.
-- When the tree is still dirty, write the `git status --porcelain` lines into the header.
-- Commit your code before the final logged runs, so the header names the commit that was tested.
+### 6. Carry-overs from review 01
+- Issue 1: update the mock's IO_CHANGE comment. Drop the reference to "NEXT 01 req. 9" and cite the hardware result in `docs/iterations/01/logs/build-hw-20261017-003245.txt`: from I2C_S_100KHZ, IO_CHANGE returned `FF 00` and the mode stayed 0x40. Keep "assumption" for other starting modes.
+- Issue 2: in `test_default_timeout_is_500ms`, require the default to be exactly `0.5` for `Transport.read` and `MockTransport.read`. Only `SerialTransport.read` may default to `None`. This is the only edit allowed to an existing test.
 
 ## Constraints / out of scope
-- No SERIAL_IO, I2C, SPI transfer or I/O commands (iterations 02–03). No GUI.
+- No I2C or SPI transfer commands (iteration 03). No GUI.
+- No serial mode on hardware (see below).
 - Do not edit SPEC, DECISIONS, the role files, the templates, LOG or CHANGES.
 - No new dependencies.
 
 ## Hardware tests
-**safe-read + mode set, inputs only.** No outputs are driven and no serial or SPI mode is entered. In I2C mode, I/O1 and I/O2 stay general I/O (pin table p.3). Every IO_TYPE below sets them to inputs. Do **not** use the p.9 example `04`, which drives I/O2 high.
+**safe-read + mode set + SETPINS with no output pins.** No pin is ever set as an output, so SETPINS cannot drive anything (p.20: SETPINS only affects output pins). No serial mode is entered: in serial mode I/O2 becomes a driven TX pin, and nothing in this iteration needs it. Hardware SERIAL_IO waits for a NEXT that states the wiring.
 
-Sequence. Each step is one hw test or one ordered test; a fixture or `finally` must always run the restore step:
-1. `5A 02 40 0A` (I2C_S_100KHZ, I/O1 and I/O2 digital input) → `FF 00`; ISS_VERSION mode == 0x40.
-2. `5A 02 10 0F` (IO_CHANGE, I/O1 and I/O2 analogue input) → log the raw response bytes, then assert `FF 00` (pp.6–7). Log the ISS_VERSION mode byte afterwards, but do not assert it.
-3. `5A 02 00 AA` (IO_MODE, all four pins digital input) → `FF 00`; mode == 0x00.
-4. Restore: `5A 02 40 0A` → `FF 00`; mode == 0x40. This is the power-up state (p.6, changelog v7).
+Sequence: one ordered test or several. A fixture or `finally` must always run the restore step.
+1. `5A 02 00 AA` (IO_MODE, all four pins digital input) → `FF 00`; ISS_VERSION mode == 0x00.
+   - GETPINS (`64`): log the raw response byte and assert exactly 1 byte. Pins are floating, so don't assert the value.
+2. SETPINS `63 0F`, sent as raw bytes:
+   - log the raw response;
+   - assert it is exactly one byte, `FF` or `00`. Which one is the finding: the datasheet does not say how SETPINS answers when no pin is an output.
+   - then GETPINS again; log it, don't assert it.
+3. GETAD channel 1 (`65 01`) while I/O1 is a digital input → assert `00 00` (p.20).
+4. `5A 02 00 FF` (IO_MODE, all four pins analogue input) → `FF 00`; mode == 0x00.
+   - `get_ad` on channels 1–4: log each value and assert 0 ≤ value ≤ 1023.
+5. Raw `65 00` and raw `65 05` (out-of-range channels; the builder refuses them, so send them as raw bytes) → assert `00 00` for each (p.20).
+6. Restore: `5A 02 40 0A` → `FF 00`; mode == 0x40.
 
 ## Acceptance criteria
-- [ ] `python scripts/run_tests.py --iter 01 --tag build` exits 0. The new tests cover requirements 1–7, including every datasheet example frame listed above, the full p.8 baud table with the corrected 2400 row, all three NACK reasons through `set_mode` on the mock, `FF xx` / unknown-reason / short-response errors, and the `5A 02 01 5A 01 B0` framing test.
-- [ ] `python scripts/run_tests.py --iter 01 --hw --tag build` passes on the real USB-ISS. The log shows the raw IO_CHANGE response and the mode byte after each step. The device is left in mode 0x40.
+- [ ] `python scripts/run_tests.py --iter 02 --tag build` exits 0. The new tests cover requirements 1–6 as listed under each requirement, including the p.20 GETAD examples, the 30/31-byte transmit boundary, the 62-byte receive cap, and the NACK-with-rx case.
+- [ ] `python scripts/run_tests.py --iter 02 --hw --tag build` passes on the real USB-ISS. The log shows:
+  - both raw GETPINS bytes;
+  - the raw SETPINS response;
+  - the four GETAD values;
+  - the out-of-range GETAD responses.
+  The device is left in mode 0x40.
 - [ ] The final logged runs' headers show the tested commit as `(clean)`, or list the porcelain lines.
-- [ ] The iteration 00 tests still pass unchanged.
+- [ ] The iteration 00 and 01 tests still pass, unchanged apart from requirement 6, issue 2.
 
 ## Report back
-- The raw IO_CHANGE response, and the mode byte ISS_VERSION reports after IO_CHANGE. If the mode byte differs from the mock's assumption, update the mock to match the hardware and say so.
-- Anything in pp.6–10 you found ambiguous. For example: which IO_TYPE bits the firmware honours in I2C and IO+SERIAL modes. Don't test this on hardware; just note it.
+- The raw SETPINS response with no output pins, and both raw GETPINS bytes, including the values of bits 7:4.
+- The four GETAD values with the pins floating.
+- Anything on pp.19–20 you found ambiguous. For example, whether TxCount means bytes still pending or free space. This brief reads it as pending ("characters remaining in the transmit buffer"). Note ambiguities; don't test them on hardware.
