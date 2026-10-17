@@ -21,6 +21,7 @@ If any two of these conflict, stop and report the conflict. Never resolve it sil
 
 ## Hardware
 - A USB-ISS is attached to this machine. Its port is read from `USB_ISS_PORT` (set in `.env`, which is not committed).
+- What is wired to it is described in `docs/HARDWARE.md`. Read that file before any hardware test. A `NEXT.md` hardware section must agree with it; if it doesn't, stop and report the conflict.
 - Only one process can hold the port at a time. Never run hardware tests while the other instance might be running them.
 - Hardware tests default to safe, read-only operations (version, serial number, mode set, I2C_TEST, GETPINS, GETAD). Driving outputs or writing to a downstream device is allowed only when `NEXT.md` asks for it explicitly.
 

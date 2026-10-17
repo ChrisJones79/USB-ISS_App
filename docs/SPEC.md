@@ -157,4 +157,4 @@ Each item is roughly one iteration. revclaude may split an item, but must not me
 ## 8. Datasheet notes
 - **Baud formula (USB-ISS datasheet p.8).** The text prints `48000000/(16+baud)`. The correct formula is `48000000/(16*baud) - 1`, which matches the worked example and the table. Use floor, which matches every table row (19200 gives 155, 9600 gives 311). The actual rate is `48000000/(16*(divisor+1))`.
 - **Baud table error (p.8).** The 2400 row lists bytes `0x09 0xE1`, which is 2529. The divisor 1249 is `0x04 0xE1`. Trust the formula, not that row. Add a unit test for it.
-- **ISS_MODE response.** The datasheet does not say whether IO_CHANGE returns the same 2-byte response as the other mode commands. Verify this on hardware in iteration 01.
+- **IO_CHANGE response (resolved).** On hardware, IO_CHANGE in I2C_S_100KHZ returns `FF 00` and leaves the ISS_VERSION mode byte unchanged (iteration 01 hardware logs, firmware 0x09).

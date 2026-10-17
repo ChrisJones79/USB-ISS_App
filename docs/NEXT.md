@@ -117,7 +117,7 @@ Iteration 01 was accepted (`iter-01`). ISS_MODE, IO_TYPE, the divisor calculator
 
 Sequence: one ordered test or several. A fixture or `finally` must always run the restore step.
 1. `5A 02 00 AA` (IO_MODE, all four pins digital input) → `FF 00`; ISS_VERSION mode == 0x00.
-   - GETPINS (`64`): log the raw response byte and assert exactly 1 byte. Pins are floating, so don't assert the value.
+   - GETPINS (`64`): log the raw response byte and assert exactly 1 byte. Don't assert the value: I/O1 is driven by the GY module's TX and the other pins float (`docs/HARDWARE.md`).
 2. SETPINS `63 0F`, sent as raw bytes:
    - log the raw response;
    - assert it is exactly one byte, `FF` or `00`. Which one is the finding: the datasheet does not say how SETPINS answers when no pin is an output.
@@ -126,7 +126,7 @@ Sequence: one ordered test or several. A fixture or `finally` must always run th
 4. `5A 02 00 FF` (IO_MODE, all four pins analogue input) → `FF 00`; mode == 0x00.
    - `get_ad` on channels 1–4: log each value and assert 0 ≤ value ≤ 1023.
 5. Raw `65 00` and raw `65 05` (out-of-range channels; the builder refuses them, so send them as raw bytes) → assert `00 00` for each (p.20).
-6. Restore: `5A 02 40 0A` → `FF 00`; mode == 0x40.
+6. Restore: `5A 02 40 AA` → `FF 00`; mode == 0x40.
 
 ## Acceptance criteria
 - [ ] `python scripts/run_tests.py --iter 02 --tag build` exits 0. The new tests cover requirements 1–6 as listed under each requirement, including the p.20 GETAD examples, the 30/31-byte transmit boundary, the 62-byte receive cap, and the NACK-with-rx case.
@@ -141,5 +141,5 @@ Sequence: one ordered test or several. A fixture or `finally` must always run th
 
 ## Report back
 - The raw SETPINS response with no output pins, and both raw GETPINS bytes, including the values of bits 7:4.
-- The four GETAD values with the pins floating.
+- The four GETAD values: I/O1 is connected to the module's TX, and I/O2–I/O4 are floating or connected to the module's RX (`docs/HARDWARE.md`).
 - Anything on pp.19–20 you found ambiguous. For example, whether TxCount means bytes still pending or free space. This brief reads it as pending ("characters remaining in the transmit buffer"). Note ambiguities; don't test them on hardware.
