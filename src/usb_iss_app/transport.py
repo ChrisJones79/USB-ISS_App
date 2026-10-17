@@ -54,6 +54,7 @@ class SerialTransport(Transport):
         if not port:
             raise ValueError("USB_ISS_PORT is not set (environment or .env)")
         # Baud has no effect on the USB-ISS (datasheet p.4); pyserial default is used.
+        self._timeout = timeout
         self._ser = serial.Serial(port, timeout=timeout)
         self._ser.reset_input_buffer()
 
@@ -61,8 +62,8 @@ class SerialTransport(Transport):
         self._ser.write(data)
         self._ser.flush()
 
-    def read(self, n: int, timeout: float = DEFAULT_TIMEOUT) -> bytes:
-        self._ser.timeout = timeout
+    def read(self, n: int, timeout: float | None = None) -> bytes:
+        self._ser.timeout = self._timeout if timeout is None else timeout
         return self._ser.read(n)
 
     def close(self) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+from . import iss
 from .transport import DEFAULT_TIMEOUT, Transport
 
 log = logging.getLogger(__name__)
@@ -17,6 +18,49 @@ class MockTransport(Transport):
         self._rx = bytearray()
         self._tx = bytearray()
         self.closed = False
+        self._force_nack: int | None = None
+
+    def force_next_mode_nack(self, reason: int) -> None:
+        """Test-only: the next ISS_MODE frame is consumed and answered 00 <reason>."""
+        self._force_nack = reason
+
+    @staticmethod
+    def _mode_frame_len(mode: int) -> int | None:
+        """Total frame length by mode byte, datasheet pp.6-10; None for an unknown mode."""
+        if mode in (iss.IO_MODE, iss.IO_CHANGE) or mode in iss.I2C_MODES:
+            return 4
+        if iss.SPI_MODE <= mode <= iss.SPI_MODE | 3:
+            return 4
+        if mode & ~iss.SERIAL in iss.I2C_MODES and mode & iss.SERIAL:
+            return 5
+        if mode == iss.IO_MODE | iss.SERIAL:
+            return 6
+        return None
+
+    def _mode_command(self) -> bool:
+        """Handle a 5A 02 frame at the head of _tx. False if it is still incomplete."""
+        if len(self._tx) < 3:
+            return False
+        mode = self._tx[2]
+        n = self._mode_frame_len(mode)
+        if n is None:
+            # ASSUMPTION (not verified on hardware): an unknown mode byte is NACKed 00 05
+            # after only "5A 02 <mode>" has been consumed.
+            self._rx += bytes([0x00, 0x05])
+            del self._tx[:3]
+            return True
+        if len(self._tx) < n:
+            return False  # wait for the whole frame; its bytes are never commands
+        if self._force_nack is not None:
+            self._rx += bytes([0x00, self._force_nack])
+            self._force_nack = None
+        else:
+            self._rx += bytes([0xFF, 0x00])
+            # ASSUMPTION (see NEXT 01 req. 9): IO_CHANGE leaves the reported mode unchanged.
+            if mode != iss.IO_CHANGE:
+                self.mode = mode
+        del self._tx[:n]
+        return True
 
     def write(self, data: bytes) -> None:
         self._tx += data
@@ -32,6 +76,10 @@ class MockTransport(Transport):
             sub = self._tx[1]
             if sub == 0x01:  # ISS_VERSION, datasheet p.5
                 self._rx += bytes([0x07, self.firmware, self.mode])
+            elif sub == 0x02:  # ISS_MODE, datasheet p.6
+                if not self._mode_command():
+                    return
+                continue
             elif sub == 0x03:  # GET_SER_NUM, datasheet p.5
                 self._rx += self.serial.encode("ascii")
             else:

@@ -1,6 +1,8 @@
 """Layer 2: USB-ISS protocol. Pure builders/parsers plus thin helpers."""
 from __future__ import annotations
 
+import enum
+import math
 from typing import NamedTuple
 
 from .transport import Transport
@@ -21,10 +23,19 @@ class IssProtocolError(IssError):
     """Response bytes violate the datasheet."""
 
 
+class IssNack(IssError):
+    """ISS_MODE answered NACK (00 rr), datasheet p.6."""
+
+    def __init__(self, reason: int):
+        self.reason = reason
+        self.name = NACK_REASONS.get(reason, f"Unknown reason 0x{reason:02X}")
+        super().__init__(f"ISS_MODE NACK: 0x{reason:02X} {self.name}")
+
+
 class Version(NamedTuple):
     module_id: int
     firmware: int
-    mode: int  # raw ISS_MODE byte; decoded in iteration 01
+    mode: int  # raw ISS_MODE byte; see decode_mode()
 
 
 # ISS_VERSION (0x01), datasheet p.5: send 5A 01, receive module_id(7) firmware mode.
@@ -62,3 +73,170 @@ def version(transport: Transport) -> Version:
 def serial_number(transport: Transport) -> str:
     transport.write(build_serial_number())
     return parse_serial_number(transport.read(8))
+
+
+# ---- ISS_MODE (0x02), datasheet pp.6-10 ----
+IO_MODE = 0x00  # p.6
+IO_CHANGE = 0x10
+I2C_S_20KHZ = 0x20
+I2C_S_50KHZ = 0x30
+I2C_S_100KHZ = 0x40
+I2C_S_400KHZ = 0x50
+I2C_H_100KHZ = 0x60
+I2C_H_400KHZ = 0x70
+I2C_H_1000KHZ = 0x80
+SPI_MODE = 0x90  # phase 0-3 in bits 1:0 (p.10)
+SERIAL = 0x01  # combinable with IO_MODE (p.8) and the I2C modes (p.9)
+
+I2C_MODES = {
+    I2C_S_20KHZ: "I2C_S_20KHZ",
+    I2C_S_50KHZ: "I2C_S_50KHZ",
+    I2C_S_100KHZ: "I2C_S_100KHZ",
+    I2C_S_400KHZ: "I2C_S_400KHZ",
+    I2C_H_100KHZ: "I2C_H_100KHZ",
+    I2C_H_400KHZ: "I2C_H_400KHZ",
+    I2C_H_1000KHZ: "I2C_H_1000KHZ",
+}
+
+NACK_REASONS = {0x05: "Unknown command", 0x06: "Internal Error 1", 0x07: "Internal Error 2"}  # p.6
+
+BAUD_MAX_ERROR_PCT = 3.0  # SPEC F2
+
+
+def decode_mode(b: int) -> str:
+    """Name a mode byte as reported by ISS_VERSION. Never raises."""
+    if b == IO_MODE:
+        return "IO_MODE"
+    if b == IO_MODE | SERIAL:
+        return "IO_MODE+SERIAL"
+    if b == IO_CHANGE:
+        return "IO_CHANGE"
+    if b in I2C_MODES:
+        return I2C_MODES[b]
+    if b & ~SERIAL in I2C_MODES:
+        return I2C_MODES[b & ~SERIAL] + "+SERIAL"
+    if SPI_MODE <= b <= SPI_MODE | 3:
+        return f"SPI_MODE phase {b & 3}"
+    return f"UNKNOWN(0x{b:02X})"
+
+
+class IoType(enum.IntEnum):
+    """Two-bit pin setting, datasheet p.7."""
+
+    OUTPUT_LOW = 0b00
+    OUTPUT_HIGH = 0b01
+    DIGITAL_INPUT = 0b10
+    ANALOGUE_INPUT = 0b11
+
+
+def io_type(io1: int, io2: int, io3: int, io4: int) -> int:
+    """IO_TYPE byte, datasheet p.7: pin 1 in bits 1:0 ... pin 4 in bits 7:6."""
+    out = 0
+    for i, pin in enumerate((io1, io2, io3, io4)):
+        out |= IoType(pin) << (2 * i)
+    return out
+
+
+def baud_divisor(bps: int) -> tuple[int, float, float]:
+    """(divisor, actual_bps, error_pct). SPEC §8: floor(48e6/(16*bps)) - 1, not the p.8 text."""
+    if bps <= 0:
+        raise ValueError(f"baud rate must be positive, got {bps}")
+    divisor = 48_000_000 // (16 * bps) - 1
+    actual = 48_000_000 / (16 * (divisor + 1)) if divisor >= 0 else float("inf")
+    return divisor, actual, (actual - bps) / bps * 100
+
+
+def _checked_baud(bps: int) -> int:
+    divisor, actual, err = baud_divisor(bps)
+    if not 0 <= divisor <= 0xFFFF:
+        raise ValueError(f"baud {bps}: divisor {divisor} outside 0-65535")
+    if abs(err) > BAUD_MAX_ERROR_PCT:
+        raise ValueError(f"baud {bps}: actual {actual:.0f} is {err:+.2f}% off (limit {BAUD_MAX_ERROR_PCT}%)")
+    return divisor
+
+
+SPI_MAX_HZ = 3_000_000
+SPI_MIN_HZ = 6_000_000 / 256  # 23437.5, divisor 255
+
+
+def spi_divisor(sck_hz: float) -> tuple[int, float, float]:
+    """(divisor, actual_hz, error_pct), D-005: ceil(6e6/sck) - 1, 1-255; actual never above request."""
+    if sck_hz <= 0 or sck_hz > SPI_MAX_HZ or sck_hz < SPI_MIN_HZ:
+        raise ValueError(f"SCK {sck_hz} Hz outside {SPI_MIN_HZ}-{SPI_MAX_HZ} Hz")
+    divisor = math.ceil(6_000_000 / sck_hz) - 1
+    if not 1 <= divisor <= 255:
+        raise ValueError(f"SCK {sck_hz} Hz: divisor {divisor} outside 1-255")
+    actual = 6_000_000 / (divisor + 1)
+    return divisor, actual, (actual - sck_hz) / sck_hz * 100
+
+
+def _byte(v: int, what: str) -> int:
+    if not 0 <= v <= 0xFF:
+        raise ValueError(f"{what} {v} is not a byte")
+    return v
+
+
+def _mode_frame(*rest: int) -> bytes:
+    return bytes([ISS_CMD, 0x02, *rest])
+
+
+# IO_MODE, p.7: 5A 02 00 tt
+def build_io_mode(io_type: int) -> bytes:
+    return _mode_frame(IO_MODE, _byte(io_type, "IO_TYPE"))
+
+
+# IO_CHANGE, p.7: 5A 02 10 tt
+def build_io_change(io_type: int) -> bytes:
+    return _mode_frame(IO_CHANGE, _byte(io_type, "IO_TYPE"))
+
+
+# IO_MODE+SERIAL, p.8: 5A 02 01 hi lo tt
+def build_io_serial(bps: int, io_type: int) -> bytes:
+    d = _checked_baud(bps)
+    return _mode_frame(IO_MODE | SERIAL, d >> 8, d & 0xFF, _byte(io_type, "IO_TYPE"))
+
+
+def _check_i2c(mode: int) -> int:
+    if mode not in I2C_MODES:
+        raise ValueError(f"0x{mode:02X} is not an I2C mode")
+    return mode
+
+
+# I2C_MODE, p.9: 5A 02 mm tt
+def build_i2c_mode(mode: int, io_type: int) -> bytes:
+    return _mode_frame(_check_i2c(mode), _byte(io_type, "IO_TYPE"))
+
+
+# I2C_MODE+SERIAL, p.9: 5A 02 (mm|01) hi lo
+def build_i2c_serial(mode: int, bps: int) -> bytes:
+    _check_i2c(mode)
+    d = _checked_baud(bps)
+    return _mode_frame(mode | SERIAL, d >> 8, d & 0xFF)
+
+
+# SPI_MODE, p.10: 5A 02 (90|phase) dd
+def build_spi_mode(phase: int, sck_hz: float) -> bytes:
+    if phase not in range(4):
+        raise ValueError(f"SPI phase {phase} outside 0-3")
+    return _mode_frame(SPI_MODE | phase, spi_divisor(sck_hz)[0])
+
+
+def parse_mode_response(resp: bytes) -> None:
+    """ISS_MODE response, p.6: FF 00 is OK; 00 rr is NACK with reason rr."""
+    if len(resp) < 2:
+        raise IssTimeout(f"ISS_MODE: expected 2 bytes, got {len(resp)}")
+    first, second = resp[0], resp[1]
+    if first == 0xFF:
+        if second != 0:
+            raise IssProtocolError(f"ISS_MODE: ACK followed by 0x{second:02X}, expected 0x00")
+        return
+    if first == 0x00:
+        if second in NACK_REASONS:
+            raise IssNack(second)
+        raise IssProtocolError(f"ISS_MODE: NACK with unknown reason 0x{second:02X}")
+    raise IssProtocolError(f"ISS_MODE: first byte 0x{first:02X} is neither ACK nor NACK")
+
+
+def set_mode(transport: Transport, frame: bytes) -> None:
+    transport.write(frame)
+    parse_mode_response(transport.read(2))

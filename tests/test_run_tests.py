@@ -29,3 +29,14 @@ def test_hw_without_port_refuses(tmp_path):
     assert r.returncode != 0
     assert "USB_ISS_PORT" in r.stderr
     assert not (ROOT / "docs" / "iterations" / "99").exists()
+
+
+def test_filter_porcelain_ignores_logs():
+    lines = [
+        "?? docs/iterations/01/logs/build-mock-1.txt",
+        " M docs/iterations/01/logs/build-mock-1.xml",
+        " M src/usb_iss_app/iss.py",
+        "?? docs/iterations/01/build.md",
+    ]
+    assert run_tests.filter_porcelain(lines) == lines[2:]
+    assert run_tests.filter_porcelain(lines[:2]) == []
