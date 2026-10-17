@@ -1,0 +1,37 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0 -- /home/chris/claude/USB-ISS_App/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/chris/claude/USB-ISS_App
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+tests/test_hw.py::test_hw_io_getad_on_digital_pin FAILED                 [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_hw_io_getad_on_digital_pin ________________________
+
+io_hw = (<usb_iss_app.transport.SerialTransport object at 0x7391814f3020>, <function io_hw.<locals>.mode_byte at 0x7391814ea660>, <function io_hw.<locals>.raw at 0x7391814eac00>)
+
+    def test_hw_io_getad_on_digital_pin(io_hw):
+        """NEXT 02 step 3: p.20 says 00 00 for a channel not set up as analogue."""
+        hw, mode_byte, raw = io_hw
+        iss.set_mode(hw, iss.build_io_mode(0xAA))
+        assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+>       assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
+E       AssertionError: assert b'\x02\xe6' == b'\x00\x00'
+E         
+E         At index 0 diff: b'\x02' != b'\x00'
+E         
+E         Full diff:
+E         - b'\x00\x00'
+E         + b'\x02\xe6'
+
+tests/test_hw.py:79: AssertionError
+----------------------------- Captured stdout call -----------------------------
+HW after IO_MODE 5A 02 00 AA: mode=0x00 (IO_MODE)
+HW GETAD digital 65 01 raw response: 02 e6
+--------------------------- Captured stdout teardown ---------------------------
+HW after restore 5A 02 40 AA: mode=0x40 (I2C_S_100KHZ)
+=========================== short test summary info ============================
+FAILED tests/test_hw.py::test_hw_io_getad_on_digital_pin - AssertionError: as...
+============================== 1 failed in 0.54s ===============================
