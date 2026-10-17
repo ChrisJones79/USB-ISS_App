@@ -29,7 +29,7 @@ Four layers. Each layer depends only on the layers below it.
    - Holds the ISS panel (version, serial number, mode, I/O) and a card host, which loads a card's UI panel.
 
 **The mock.**
-- The mock USB-ISS emulates the datasheet behaviour: responses, NACK reasons and buffer limits.
+- The mock USB-ISS emulates the datasheet behaviour: responses, NACK reasons and buffer limits. Where the real device has been shown to contradict the datasheet, the mock follows the device, and §8 records the erratum with its evidence.
 - A card may ship a mock of its device, so it can be tested without hardware.
 
 ## 4. Features (v1)
@@ -158,3 +158,5 @@ Each item is roughly one iteration. revclaude may split an item, but must not me
 - **Baud formula (USB-ISS datasheet p.8).** The text prints `48000000/(16+baud)`. The correct formula is `48000000/(16*baud) - 1`, which matches the worked example and the table. Use floor, which matches every table row (19200 gives 155, 9600 gives 311). The actual rate is `48000000/(16*(divisor+1))`.
 - **Baud table error (p.8).** The 2400 row lists bytes `0x09 0xE1`, which is 2529. The divisor 1249 is `0x04 0xE1`. Trust the formula, not that row. Add a unit test for it.
 - **IO_CHANGE response (resolved).** On hardware, IO_CHANGE in I2C_S_100KHZ returns `FF 00` and leaves the ISS_VERSION mode byte unchanged (iteration 01 hardware logs, firmware 0x09).
+- **GETAD on a digital-input pin (erratum, p.20).** The datasheet says a channel that is not set up as analogue returns `0000`. Firmware 0x09 returns the ADC conversion when the pin is a general-I/O digital input. Two units show this, each power-cycled, with nothing attached and the test run alone: serial 00069221 gave `03 D4` (`claude1-discriminator-hw.txt`), and serial 00069220 gave `03 FF` (`claude1-discriminator-hw-unit2.txt`); both logs are in `docs/iterations/02/logs/`. Other firmware versions are unknown. Earlier values (737–742) came from runs with the GY module attached. Out-of-range channels (0, 5) do return `0000`, as documented. GETAD on output pins and on I2C/serial pins is untested.
+- **SETPINS with no output pins (p.20, unspecified).** In IO_MODE with all pins digital input, `63 0F` returns `00` (NACK) (iteration 02 hardware logs).

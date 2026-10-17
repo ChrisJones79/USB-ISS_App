@@ -5,33 +5,66 @@ rootdir: /home/chris/claude/USB-ISS_App
 configfile: pyproject.toml
 collecting ... collected 1 item
 
-tests/test_hw.py::test_hw_io_getad_on_digital_pin FAILED                 [100%]
+tests/test_hw.py::test_hw_io_getad_on_digital_pin ERROR                  [100%]
 
-=================================== FAILURES ===================================
-_______________________ test_hw_io_getad_on_digital_pin ________________________
+==================================== ERRORS ====================================
+______________ ERROR at setup of test_hw_io_getad_on_digital_pin _______________
 
-io_hw = (<usb_iss_app.transport.SerialTransport object at 0x7391814f3020>, <function io_hw.<locals>.mode_byte at 0x7391814ea660>, <function io_hw.<locals>.raw at 0x7391814eac00>)
+self = Serial<id=0x7b29629f3010, open=False>(port='/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00', baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.5, xonxoff=False, rtscts=False, dsrdtr=False)
 
-    def test_hw_io_getad_on_digital_pin(io_hw):
-        """NEXT 02 step 3: p.20 says 00 00 for a channel not set up as analogue."""
-        hw, mode_byte, raw = io_hw
-        iss.set_mode(hw, iss.build_io_mode(0xAA))
-        assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
->       assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
-E       AssertionError: assert b'\x02\xe6' == b'\x00\x00'
-E         
-E         At index 0 diff: b'\x02' != b'\x00'
-E         
-E         Full diff:
-E         - b'\x00\x00'
-E         + b'\x02\xe6'
+    def open(self):
+        """\
+        Open port with current settings. This may throw a SerialException
+        if the port cannot be opened."""
+        if self._port is None:
+            raise SerialException("Port must be configured before it can be used.")
+        if self.is_open:
+            raise SerialException("Port is already open.")
+        self.fd = None
+        # open
+        try:
+>           self.fd = os.open(self.portstr, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           FileNotFoundError: [Errno 2] No such file or directory: '/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00'
 
-tests/test_hw.py:79: AssertionError
------------------------------ Captured stdout call -----------------------------
-HW after IO_MODE 5A 02 00 AA: mode=0x00 (IO_MODE)
-HW GETAD digital 65 01 raw response: 02 e6
---------------------------- Captured stdout teardown ---------------------------
-HW after restore 5A 02 40 AA: mode=0x40 (I2C_S_100KHZ)
+.venv/lib/python3.12/site-packages/serial/serialposix.py:322: FileNotFoundError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def hw():
+>       t = SerialTransport()
+            ^^^^^^^^^^^^^^^^^
+
+tests/conftest.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/usb_iss_app/transport.py:58: in __init__
+    self._ser = serial.Serial(port, timeout=timeout)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/serial/serialutil.py:244: in __init__
+    self.open()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Serial<id=0x7b29629f3010, open=False>(port='/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00', baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.5, xonxoff=False, rtscts=False, dsrdtr=False)
+
+    def open(self):
+        """\
+        Open port with current settings. This may throw a SerialException
+        if the port cannot be opened."""
+        if self._port is None:
+            raise SerialException("Port must be configured before it can be used.")
+        if self.is_open:
+            raise SerialException("Port is already open.")
+        self.fd = None
+        # open
+        try:
+            self.fd = os.open(self.portstr, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        except OSError as msg:
+            self.fd = None
+>           raise SerialException(msg.errno, "could not open port {}: {}".format(self._port, msg))
+E           serial.serialutil.SerialException: [Errno 2] could not open port /dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00: [Errno 2] No such file or directory: '/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00'
+
+.venv/lib/python3.12/site-packages/serial/serialposix.py:325: SerialException
 =========================== short test summary info ============================
-FAILED tests/test_hw.py::test_hw_io_getad_on_digital_pin - AssertionError: as...
-============================== 1 failed in 0.54s ===============================
+ERROR tests/test_hw.py::test_hw_io_getad_on_digital_pin - serial.serialutil.S...
+=============================== 1 error in 0.05s ===============================

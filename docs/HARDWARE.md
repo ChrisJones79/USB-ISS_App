@@ -2,12 +2,14 @@
 
 Chris owns this file. It describes what is physically connected to the USB-ISS right now. Read it before any hardware test. A `NEXT.md` hardware section must be consistent with it. If they disagree, stop and report the conflict.
 
-Last updated: 2026-10-17 (claude1, from Chris's description).
+Last updated: 2026-10-17 (claude1, from Chris's description; second unit and .env note added in iteration 02).
 
 ## USB-ISS
 - Connected to the PC over USB. The port comes from `USB_ISS_PORT` in `.env`.
 - **The 5 V power link is fitted.** VCC is 5 V, up to 80 mA available (datasheet p.3).
-- Firmware 0x09, serial 00069221 (iteration 00 hardware log).
+- Firmware 0x09, serial 00069221 (iteration 00 hardware log). This is the bench unit, and `.env` points to it.
+- A second USB-ISS, serial 00069220 (firmware 0x09), is available but not normally connected. It was used once in iteration 02 to cross-check the GETAD erratum.
+- **The `.env` setting is copied into each VS Code terminal when the terminal opens** (`python.terminal.useEnvFile`), and the environment variable takes priority over `.env`. After you edit `.env`, open a new terminal. To use a different port for one run, set it on the command line: `USB_ISS_PORT=... <command>`.
 
 ## Attached: GY-MCU90640, serial mode (card `gy-mcu90640`, mode `serial`)
 

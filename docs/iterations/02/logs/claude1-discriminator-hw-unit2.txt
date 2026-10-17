@@ -1,0 +1,43 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0 -- /home/chris/claude/USB-ISS_App/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/chris/claude/USB-ISS_App
+configfile: pyproject.toml
+collecting ... collected 2 items
+
+tests/test_hw.py::test_hw_version PASSED                                 [ 50%]
+tests/test_hw.py::test_hw_io_getad_on_digital_pin FAILED                 [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_hw_io_getad_on_digital_pin ________________________
+
+io_hw = (<usb_iss_app.transport.SerialTransport object at 0x7440272170e0>, <function io_hw.<locals>.mode_byte at 0x74402720a520>, <function io_hw.<locals>.raw at 0x744027a234c0>)
+
+    def test_hw_io_getad_on_digital_pin(io_hw):
+        """NEXT 02 step 3: p.20 says 00 00 for a channel not set up as analogue."""
+        hw, mode_byte, raw = io_hw
+        iss.set_mode(hw, iss.build_io_mode(0xAA))
+        assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+>       assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
+E       AssertionError: assert b'\x03\xff' == b'\x00\x00'
+E         
+E         At index 0 diff: b'\x03' != b'\x00'
+E         
+E         Full diff:
+E         - b'\x00\x00'
+E         + b'\x03\xff'
+
+tests/test_hw.py:79: AssertionError
+----------------------------- Captured stdout call -----------------------------
+HW after IO_MODE 5A 02 00 AA: mode=0x00 (IO_MODE)
+HW GETAD digital 65 01 raw response: 03 ff
+--------------------------- Captured stdout teardown ---------------------------
+HW after restore 5A 02 40 AA: mode=0x40 (I2C_S_100KHZ)
+==================================== PASSES ====================================
+_______________________________ test_hw_version ________________________________
+----------------------------- Captured stdout call -----------------------------
+HW ISS_VERSION: module_id=7 firmware=0x09 mode=0x40
+=========================== short test summary info ============================
+PASSED tests/test_hw.py::test_hw_version
+FAILED tests/test_hw.py::test_hw_io_getad_on_digital_pin - AssertionError: as...
+========================= 1 failed, 1 passed in 0.57s ==========================
