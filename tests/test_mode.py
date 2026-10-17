@@ -246,8 +246,9 @@ def test_mock_unknown_subcommand_still_dropped(mock):
 # ---- requirements 6 and 7: timeouts ----
 def test_default_timeout_is_500ms():
     assert transport.DEFAULT_TIMEOUT == 0.5
-    for fn in (transport.Transport.read, MockTransport.read, transport.SerialTransport.__init__):
-        assert inspect.signature(fn).parameters["timeout"].default in (0.5, None)
+    for fn in (transport.Transport.read, MockTransport.read):
+        assert inspect.signature(fn).parameters["timeout"].default == 0.5
+    assert inspect.signature(transport.SerialTransport.read).parameters["timeout"].default is None
     assert inspect.signature(transport.SerialTransport.__init__).parameters["timeout"].default == 0.5
 
 

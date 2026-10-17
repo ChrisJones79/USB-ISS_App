@@ -24,12 +24,16 @@ class IssProtocolError(IssError):
 
 
 class IssNack(IssError):
-    """ISS_MODE answered NACK (00 rr), datasheet p.6."""
+    """A command answered NACK: ISS_MODE (00 rr, datasheet p.6) or SETPINS (00, p.20; reason is None)."""
 
-    def __init__(self, reason: int):
+    def __init__(self, reason: int | None = None, command: str = "ISS_MODE"):
         self.reason = reason
+        if reason is None:
+            self.name = None
+            super().__init__(f"{command} NACK")
+            return
         self.name = NACK_REASONS.get(reason, f"Unknown reason 0x{reason:02X}")
-        super().__init__(f"ISS_MODE NACK: 0x{reason:02X} {self.name}")
+        super().__init__(f"{command} NACK: 0x{reason:02X} {self.name}")
 
 
 class Version(NamedTuple):
@@ -240,3 +244,111 @@ def parse_mode_response(resp: bytes) -> None:
 def set_mode(transport: Transport, frame: bytes) -> None:
     transport.write(frame)
     parse_mode_response(transport.read(2))
+
+
+# ---- SERIAL_IO, SETPINS, GETPINS, GETAD, datasheet pp.19-20 ----
+SERIAL_IO = 0x62
+SETPINS = 0x63
+GETPINS = 0x64
+GETAD = 0x65
+SERIAL_TX_MAX = 30  # p.19: transmit buffer size
+SERIAL_RX_MAX = 62  # p.19: receive buffer size
+AD_MAX = 1023  # p.20: 10-bit converter
+
+
+class SerialIoResult(NamedTuple):
+    ack: bool
+    tx_count: int  # bytes still pending in the transmit buffer (our reading of p.19)
+    rx: bytes
+
+
+# SERIAL_IO, p.19: 62 followed by up to 30 data bytes; no data is the receive poll.
+def build_serial_io(data: bytes = b"") -> bytes:
+    if len(data) > SERIAL_TX_MAX:
+        raise ValueError(f"SERIAL_IO: {len(data)} bytes exceeds the {SERIAL_TX_MAX}-byte transmit buffer")
+    return bytes([SERIAL_IO]) + bytes(data)
+
+
+def parse_serial_io_header(resp: bytes) -> tuple[bool, int, int]:
+    """First 3 response bytes, p.19: ACK/NACK, TxCount, RxCount."""
+    if len(resp) < 3:
+        raise IssTimeout(f"SERIAL_IO: expected 3 header bytes, got {len(resp)}")
+    if resp[0] not in (0xFF, 0x00):
+        raise IssProtocolError(f"SERIAL_IO: first byte 0x{resp[0]:02X} is neither ACK nor NACK")
+    tx_count, rx_count = resp[1], resp[2]
+    if tx_count > SERIAL_TX_MAX:
+        raise IssProtocolError(f"SERIAL_IO: TxCount {tx_count} > {SERIAL_TX_MAX}")
+    if rx_count > SERIAL_RX_MAX:
+        raise IssProtocolError(f"SERIAL_IO: RxCount {rx_count} > {SERIAL_RX_MAX}")
+    return resp[0] == 0xFF, tx_count, rx_count
+
+
+def serial_io(transport: Transport, data: bytes = b"") -> SerialIoResult:
+    transport.write(build_serial_io(data))
+    ack, tx_count, rx_count = parse_serial_io_header(transport.read(3))
+    # INTERPRETATION of p.19 (not verified): a NACK only means the transmit buffer had no room,
+    # and p.19 says to always read the three header bytes and then RxCount bytes. So a NACK does
+    # not raise; the received bytes are still read and returned, or the serial stream would lose them.
+    rx = transport.read(rx_count) if rx_count else b""
+    if len(rx) < rx_count:
+        raise IssTimeout(f"SERIAL_IO: expected {rx_count} rx bytes, got {len(rx)}")
+    return SerialIoResult(ack, tx_count, rx)
+
+
+# SETPINS, p.20: 63 ss, I/O1 in bit 0 ... I/O4 in bit 3; bits 7:4 are X.
+def build_set_pins(states: int) -> bytes:
+    if not 0 <= states <= 0x0F:
+        raise ValueError(f"SETPINS: states 0x{states:X} outside 0x00-0x0F")
+    return bytes([SETPINS, states])
+
+
+def parse_set_pins(resp: bytes) -> None:
+    if len(resp) < 1:
+        raise IssTimeout("SETPINS: expected 1 byte, got 0")
+    if resp[0] == 0xFF:
+        return
+    if resp[0] == 0x00:
+        raise IssNack(None, "SETPINS")
+    raise IssProtocolError(f"SETPINS: response 0x{resp[0]:02X} is neither ACK nor NACK")
+
+
+def set_pins(transport: Transport, states: int) -> None:
+    transport.write(build_set_pins(states))
+    parse_set_pins(transport.read(1))
+
+
+# GETPINS, p.20: 64, receive one byte, pin states in bits 3:0.
+def build_get_pins() -> bytes:
+    return bytes([GETPINS])
+
+
+def parse_get_pins(resp: bytes) -> int:
+    if len(resp) < 1:
+        raise IssTimeout("GETPINS: expected 1 byte, got 0")
+    return resp[0] & 0x0F  # bits 7:4 are don't-care
+
+
+def get_pins(transport: Transport) -> int:
+    transport.write(build_get_pins())
+    return parse_get_pins(transport.read(1))
+
+
+# GETAD, p.20: 65 cc (channel 1-4), receive 16-bit big-endian value, 10-bit converter.
+def build_get_ad(channel: int) -> bytes:
+    if not 1 <= channel <= 4:
+        raise ValueError(f"GETAD: channel {channel} outside 1-4")
+    return bytes([GETAD, channel])
+
+
+def parse_get_ad(resp: bytes) -> int:
+    if len(resp) < 2:
+        raise IssTimeout(f"GETAD: expected 2 bytes, got {len(resp)}")
+    value = resp[0] << 8 | resp[1]
+    if value > AD_MAX:
+        raise IssProtocolError(f"GETAD: value {value} exceeds the 10-bit maximum {AD_MAX}")
+    return value
+
+
+def get_ad(transport: Transport, channel: int) -> int:
+    transport.write(build_get_ad(channel))
+    return parse_get_ad(transport.read(2))
