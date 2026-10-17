@@ -1,0 +1,70 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0 -- /home/chris/claude/USB-ISS_App/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/chris/claude/USB-ISS_App
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+tests/test_hw.py::test_hw_io_getad_on_digital_pin ERROR                  [100%]
+
+==================================== ERRORS ====================================
+______________ ERROR at setup of test_hw_io_getad_on_digital_pin _______________
+
+self = Serial<id=0x7b29629f3010, open=False>(port='/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00', baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.5, xonxoff=False, rtscts=False, dsrdtr=False)
+
+    def open(self):
+        """\
+        Open port with current settings. This may throw a SerialException
+        if the port cannot be opened."""
+        if self._port is None:
+            raise SerialException("Port must be configured before it can be used.")
+        if self.is_open:
+            raise SerialException("Port is already open.")
+        self.fd = None
+        # open
+        try:
+>           self.fd = os.open(self.portstr, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           FileNotFoundError: [Errno 2] No such file or directory: '/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00'
+
+.venv/lib/python3.12/site-packages/serial/serialposix.py:322: FileNotFoundError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def hw():
+>       t = SerialTransport()
+            ^^^^^^^^^^^^^^^^^
+
+tests/conftest.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/usb_iss_app/transport.py:58: in __init__
+    self._ser = serial.Serial(port, timeout=timeout)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/serial/serialutil.py:244: in __init__
+    self.open()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Serial<id=0x7b29629f3010, open=False>(port='/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00', baudrate=9600, bytesize=8, parity='N', stopbits=1, timeout=0.5, xonxoff=False, rtscts=False, dsrdtr=False)
+
+    def open(self):
+        """\
+        Open port with current settings. This may throw a SerialException
+        if the port cannot be opened."""
+        if self._port is None:
+            raise SerialException("Port must be configured before it can be used.")
+        if self.is_open:
+            raise SerialException("Port is already open.")
+        self.fd = None
+        # open
+        try:
+            self.fd = os.open(self.portstr, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        except OSError as msg:
+            self.fd = None
+>           raise SerialException(msg.errno, "could not open port {}: {}".format(self._port, msg))
+E           serial.serialutil.SerialException: [Errno 2] could not open port /dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00: [Errno 2] No such file or directory: '/dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00'
+
+.venv/lib/python3.12/site-packages/serial/serialposix.py:325: SerialException
+=========================== short test summary info ============================
+ERROR tests/test_hw.py::test_hw_io_getad_on_digital_pin - serial.serialutil.S...
+=============================== 1 error in 0.05s ===============================

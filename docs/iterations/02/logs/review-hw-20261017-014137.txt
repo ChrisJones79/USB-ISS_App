@@ -1,0 +1,432 @@
+command: scripts/run_tests.py --iter 02 --hw --tag review
+pytest command: /home/chris/claude/USB-ISS_App/.venv/bin/python -m pytest -v -rA --junitxml=/home/chris/claude/USB-ISS_App/docs/iterations/02/logs/review-hw-20261017-014137.xml --hw
+git commit: 28750715dcabe39ce3b5536083482d368d5e1d82 (clean)
+python: 3.12.15
+pytest: 9.1.1
+pyserial: 3.5
+usb-iss-app: 0.0.0
+port: /dev/serial/by-id/usb-Devantech_Ltd._USB-ISS._00069221-if00
+start (UTC): 2026-10-17T01:41:37.039923+00:00
+======================================================================
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0 -- /home/chris/claude/USB-ISS_App/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/chris/claude/USB-ISS_App
+configfile: pyproject.toml
+testpaths: tests
+collecting ... collected 165 items
+
+tests/test_hw.py::test_hw_version PASSED                                 [  0%]
+tests/test_hw.py::test_hw_serial PASSED                                  [  1%]
+tests/test_hw.py::test_hw_mode_sequence PASSED                           [  1%]
+tests/test_hw.py::test_hw_io_getpins_setpins PASSED                      [  2%]
+tests/test_hw.py::test_hw_io_getad_on_digital_pin FAILED                 [  3%]
+tests/test_hw.py::test_hw_io_getad_analogue PASSED                       [  3%]
+tests/test_io.py::test_constants PASSED                                  [  4%]
+tests/test_io.py::test_serial_io_frames PASSED                           [  4%]
+tests/test_io.py::test_serial_io_31_refused PASSED                       [  5%]
+tests/test_io.py::test_serial_header PASSED                              [  6%]
+tests/test_io.py::test_serial_header_errors[-IssTimeout] PASSED          [  6%]
+tests/test_io.py::test_serial_header_errors[\xff\x00-IssTimeout] PASSED  [  7%]
+tests/test_io.py::test_serial_header_errors[\x01\x00\x00-IssProtocolError] PASSED [  7%]
+tests/test_io.py::test_serial_header_errors[\xfe\x00\x00-IssProtocolError] PASSED [  8%]
+tests/test_io.py::test_serial_header_errors[\xff\x1f\x00-IssProtocolError] PASSED [  9%]
+tests/test_io.py::test_serial_header_errors[\xff\x00?-IssProtocolError] PASSED [  9%]
+tests/test_io.py::test_serial_io_ack_with_rx[0] PASSED                   [ 10%]
+tests/test_io.py::test_serial_io_ack_with_rx[62] PASSED                  [ 10%]
+tests/test_io.py::test_serial_io_nack_still_returns_rx PASSED            [ 11%]
+tests/test_io.py::test_serial_io_short_rx_body PASSED                    [ 12%]
+tests/test_io.py::test_pin_frames PASSED                                 [ 12%]
+tests/test_io.py::test_set_pins_range[-1] PASSED                         [ 13%]
+tests/test_io.py::test_set_pins_range[16] PASSED                         [ 13%]
+tests/test_io.py::test_set_pins_range[255] PASSED                        [ 14%]
+tests/test_io.py::test_get_ad_channel_range[0] PASSED                    [ 15%]
+tests/test_io.py::test_get_ad_channel_range[5] PASSED                    [ 15%]
+tests/test_io.py::test_get_ad_channel_range[-1] PASSED                   [ 16%]
+tests/test_io.py::test_parse_set_pins PASSED                             [ 16%]
+tests/test_io.py::test_iss_nack_mode_behaviour_unchanged PASSED          [ 17%]
+tests/test_io.py::test_parse_get_pins PASSED                             [ 18%]
+tests/test_io.py::test_parse_get_ad[02 A6-678] PASSED                    [ 18%]
+tests/test_io.py::test_parse_get_ad[00 3D-61] PASSED                     [ 19%]
+tests/test_io.py::test_parse_get_ad[03 FF-1023] PASSED                   [ 20%]
+tests/test_io.py::test_parse_get_ad[00 00-0] PASSED                      [ 20%]
+tests/test_io.py::test_parse_get_ad_errors PASSED                        [ 21%]
+tests/test_io.py::test_mock_power_up_all_inputs PASSED                   [ 21%]
+tests/test_io.py::test_mock_inputs_follow_levels PASSED                  [ 22%]
+tests/test_io.py::test_mock_outputs_and_setpins PASSED                   [ 23%]
+tests/test_io.py::test_mock_io_type_reapplied_resets_outputs PASSED      [ 23%]
+tests/test_io.py::test_mock_setpins_nack_hook PASSED                     [ 24%]
+tests/test_io.py::test_mock_setpins_no_outputs_acks PASSED               [ 24%]
+tests/test_io.py::test_mock_getad PASSED                                 [ 25%]
+tests/test_io.py::test_mock_getad_digital_pin_is_zero PASSED             [ 26%]
+tests/test_io.py::test_mock_general_pins_by_mode PASSED                  [ 26%]
+tests/test_io.py::test_mock_spi_and_i2c_serial_keep_io_type PASSED       [ 27%]
+tests/test_io.py::test_mock_serial_poll_empty PASSED                     [ 27%]
+tests/test_io.py::test_mock_serial_send_30 PASSED                        [ 28%]
+tests/test_io.py::test_mock_serial_nack_when_full PASSED                 [ 29%]
+tests/test_io.py::test_mock_serial_rx_cap PASSED                         [ 29%]
+tests/test_io.py::test_mock_serial_nack_carries_rx PASSED                [ 30%]
+tests/test_io.py::test_mock_serial_works_in_i2c_serial PASSED            [ 30%]
+tests/test_io.py::test_mock_serial_io_outside_serial_mode PASSED         [ 31%]
+tests/test_io.py::test_mock_serial_payload_5a01_is_data PASSED           [ 32%]
+tests/test_iss.py::test_version_mock_defaults PASSED                     [ 32%]
+tests/test_iss.py::test_version_request_bytes PASSED                     [ 33%]
+tests/test_iss.py::test_version_configurable PASSED                      [ 33%]
+tests/test_iss.py::test_version_short_response PASSED                    [ 34%]
+tests/test_iss.py::test_version_bad_module_id PASSED                     [ 35%]
+tests/test_iss.py::test_serial_mock_default PASSED                       [ 35%]
+tests/test_iss.py::test_serial_request_bytes PASSED                      [ 36%]
+tests/test_iss.py::test_serial_short_response PASSED                     [ 36%]
+tests/test_iss.py::test_serial_non_digit[1234567A] PASSED                [ 37%]
+tests/test_iss.py::test_serial_non_digit[1234567/] PASSED                [ 38%]
+tests/test_iss.py::test_serial_non_digit[1234567:] PASSED                [ 38%]
+tests/test_iss.py::test_serial_non_digit[\x001234567] PASSED             [ 39%]
+tests/test_iss.py::test_mock_unhandled_returns_nothing PASSED            [ 40%]
+tests/test_iss.py::test_mock_unhandled_then_valid PASSED                 [ 40%]
+tests/test_iss.py::test_mock_close PASSED                                [ 41%]
+tests/test_mode.py::test_decode_mode[0-IO_MODE] PASSED                   [ 41%]
+tests/test_mode.py::test_decode_mode[1-IO_MODE+SERIAL] PASSED            [ 42%]
+tests/test_mode.py::test_decode_mode[32-I2C_S_20KHZ] PASSED              [ 43%]
+tests/test_mode.py::test_decode_mode[48-I2C_S_50KHZ] PASSED              [ 43%]
+tests/test_mode.py::test_decode_mode[64-I2C_S_100KHZ] PASSED             [ 44%]
+tests/test_mode.py::test_decode_mode[80-I2C_S_400KHZ] PASSED             [ 44%]
+tests/test_mode.py::test_decode_mode[96-I2C_H_100KHZ] PASSED             [ 45%]
+tests/test_mode.py::test_decode_mode[112-I2C_H_400KHZ] PASSED            [ 46%]
+tests/test_mode.py::test_decode_mode[128-I2C_H_1000KHZ] PASSED           [ 46%]
+tests/test_mode.py::test_decode_mode[97-I2C_H_100KHZ+SERIAL] PASSED      [ 47%]
+tests/test_mode.py::test_decode_mode[33-I2C_S_20KHZ+SERIAL] PASSED       [ 47%]
+tests/test_mode.py::test_decode_mode[129-I2C_H_1000KHZ+SERIAL] PASSED    [ 48%]
+tests/test_mode.py::test_decode_mode[144-SPI_MODE phase 0] PASSED        [ 49%]
+tests/test_mode.py::test_decode_mode[146-SPI_MODE phase 2] PASSED        [ 49%]
+tests/test_mode.py::test_decode_mode[147-SPI_MODE phase 3] PASSED        [ 50%]
+tests/test_mode.py::test_decode_unknown[2] PASSED                        [ 50%]
+tests/test_mode.py::test_decode_unknown[17] PASSED                       [ 51%]
+tests/test_mode.py::test_decode_unknown[66] PASSED                       [ 52%]
+tests/test_mode.py::test_decode_unknown[148] PASSED                      [ 52%]
+tests/test_mode.py::test_decode_unknown[255] PASSED                      [ 53%]
+tests/test_mode.py::test_decode_unknown[160] PASSED                      [ 53%]
+tests/test_mode.py::test_mode_constants PASSED                           [ 54%]
+tests/test_mode.py::test_io_type_examples PASSED                         [ 55%]
+tests/test_mode.py::test_io_type_rejects_bad_pin PASSED                  [ 55%]
+tests/test_mode.py::test_baud_table[300-9999-39-15] PASSED               [ 56%]
+tests/test_mode.py::test_baud_table[1200-2499-9-195] PASSED              [ 56%]
+tests/test_mode.py::test_baud_table[2400-1249-4-225] PASSED              [ 57%]
+tests/test_mode.py::test_baud_table[9600-311-1-55] PASSED                [ 58%]
+tests/test_mode.py::test_baud_table[19200-155-0-155] PASSED              [ 58%]
+tests/test_mode.py::test_baud_table[38400-77-0-77] PASSED                [ 59%]
+tests/test_mode.py::test_baud_table[57600-51-0-51] PASSED                [ 60%]
+tests/test_mode.py::test_baud_table[115200-25-0-25] PASSED               [ 60%]
+tests/test_mode.py::test_baud_115200 PASSED                              [ 61%]
+tests/test_mode.py::test_baud_refused[460800] PASSED                     [ 61%]
+tests/test_mode.py::test_baud_refused[1] PASSED                          [ 62%]
+tests/test_mode.py::test_baud_refused[10000000] PASSED                   [ 63%]
+tests/test_mode.py::test_baud_refused[0] PASSED                          [ 63%]
+tests/test_mode.py::test_baud_refused[-9600] PASSED                      [ 64%]
+tests/test_mode.py::test_spi_divisor[3000000-1] PASSED                   [ 64%]
+tests/test_mode.py::test_spi_divisor[500000-11] PASSED                   [ 65%]
+tests/test_mode.py::test_spi_divisor[23437.5-255] PASSED                 [ 66%]
+tests/test_mode.py::test_spi_divisor_rounds_down_in_frequency PASSED     [ 66%]
+tests/test_mode.py::test_spi_refused[4000000] PASSED                     [ 67%]
+tests/test_mode.py::test_spi_refused[20000] PASSED                       [ 67%]
+tests/test_mode.py::test_spi_refused[0] PASSED                           [ 68%]
+tests/test_mode.py::test_spi_refused[-1] PASSED                          [ 69%]
+tests/test_mode.py::test_spi_refused[23437.4] PASSED                     [ 69%]
+tests/test_mode.py::test_frames_datasheet_examples PASSED                [ 70%]
+tests/test_mode.py::test_spi_frame_phase_and_divisor PASSED              [ 70%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[0] PASSED           [ 71%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[16_0] PASSED        [ 72%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[144_0] PASSED       [ 72%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[97] PASSED          [ 73%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[16_1] PASSED        [ 73%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[144_1] PASSED       [ 74%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[256] PASSED         [ 75%]
+tests/test_mode.py::test_i2c_builders_reject_non_i2c[-1] PASSED          [ 75%]
+tests/test_mode.py::test_spi_phase_rejected[-1] PASSED                   [ 76%]
+tests/test_mode.py::test_spi_phase_rejected[4] PASSED                    [ 76%]
+tests/test_mode.py::test_io_type_byte_rejected[-1] PASSED                [ 77%]
+tests/test_mode.py::test_io_type_byte_rejected[256] PASSED               [ 78%]
+tests/test_mode.py::test_parse_ok PASSED                                 [ 78%]
+tests/test_mode.py::test_parse_protocol_error[\xff\x01] PASSED           [ 79%]
+tests/test_mode.py::test_parse_protocol_error[\x00\x04] PASSED           [ 80%]
+tests/test_mode.py::test_parse_protocol_error[\x00\x00] PASSED           [ 80%]
+tests/test_mode.py::test_parse_protocol_error[\x00\x08] PASSED           [ 81%]
+tests/test_mode.py::test_parse_protocol_error[\x01\x00] PASSED           [ 81%]
+tests/test_mode.py::test_parse_protocol_error[\xfe\x00] PASSED           [ 82%]
+tests/test_mode.py::test_parse_short[] PASSED                            [ 83%]
+tests/test_mode.py::test_parse_short[\xff] PASSED                        [ 83%]
+tests/test_mode.py::test_parse_short[\x00] PASSED                        [ 84%]
+tests/test_mode.py::test_parse_nack[5-Unknown command] PASSED            [ 84%]
+tests/test_mode.py::test_parse_nack[6-Internal Error 1] PASSED           [ 85%]
+tests/test_mode.py::test_parse_nack[7-Internal Error 2] PASSED           [ 86%]
+tests/test_mode.py::test_set_mode_writes_frame_and_reads_two PASSED      [ 86%]
+tests/test_mode.py::test_set_mode_short_response PASSED                  [ 87%]
+tests/test_mode.py::test_mock_io_serial_framing_ignores_payload_bytes PASSED [ 87%]
+tests/test_mode.py::test_mock_waits_for_whole_frame PASSED               [ 88%]
+tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x00\xaa-0] PASSED [ 89%]
+tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x01\x00\x9b\xb0-1] PASSED [ 89%]
+tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02P\n-80] PASSED [ 90%]
+tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x81\x017-129] PASSED [ 90%]
+tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x92\x0b-146] PASSED [ 91%]
+tests/test_mode.py::test_mock_io_change_keeps_mode PASSED                [ 92%]
+tests/test_mode.py::test_mock_unknown_mode_nack PASSED                   [ 92%]
+tests/test_mode.py::test_mock_forced_nack_through_set_mode[6] PASSED     [ 93%]
+tests/test_mode.py::test_mock_forced_nack_through_set_mode[7] PASSED     [ 93%]
+tests/test_mode.py::test_mock_unknown_nack_reason_5_through_set_mode PASSED [ 94%]
+tests/test_mode.py::test_mock_unknown_subcommand_still_dropped PASSED    [ 95%]
+tests/test_mode.py::test_default_timeout_is_500ms PASSED                 [ 95%]
+tests/test_mode.py::test_serial_transport_constructor_timeout_applies PASSED [ 96%]
+tests/test_mode.py::test_serial_transport_default_timeout PASSED         [ 96%]
+tests/test_run_tests.py::test_unique_path_never_overwrites PASSED        [ 97%]
+tests/test_run_tests.py::test_hw_without_port_refuses PASSED             [ 98%]
+tests/test_run_tests.py::test_filter_porcelain_ignores_logs PASSED       [ 98%]
+tests/test_transport.py::test_env_parser PASSED                          [ 99%]
+tests/test_transport.py::test_find_port_env_wins PASSED                  [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_hw_io_getad_on_digital_pin ________________________
+
+io_hw = (<usb_iss_app.transport.SerialTransport object at 0x78295e2327e0>, <function io_hw.<locals>.mode_byte at 0x78295e22a160>, <function io_hw.<locals>.raw at 0x78295e22a200>)
+
+    def test_hw_io_getad_on_digital_pin(io_hw):
+        """NEXT 02 step 3: p.20 says 00 00 for a channel not set up as analogue."""
+        hw, mode_byte, raw = io_hw
+        iss.set_mode(hw, iss.build_io_mode(0xAA))
+        assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+>       assert raw("GETAD digital", iss.build_get_ad(1), 3) == b"\x00\x00"
+E       AssertionError: assert b'\x02\xe1' == b'\x00\x00'
+E         
+E         At index 0 diff: b'\x02' != b'\x00'
+E         
+E         Full diff:
+E         - b'\x00\x00'
+E         + b'\x02\xe1'
+
+tests/test_hw.py:79: AssertionError
+----------------------------- Captured stdout call -----------------------------
+HW after IO_MODE 5A 02 00 AA: mode=0x00 (IO_MODE)
+HW GETAD digital 65 01 raw response: 02 e1
+--------------------------- Captured stdout teardown ---------------------------
+HW after restore 5A 02 40 AA: mode=0x40 (I2C_S_100KHZ)
+==================================== PASSES ====================================
+_______________________________ test_hw_version ________________________________
+----------------------------- Captured stdout call -----------------------------
+HW ISS_VERSION: module_id=7 firmware=0x09 mode=0x40
+________________________________ test_hw_serial ________________________________
+----------------------------- Captured stdout call -----------------------------
+HW serial number: 00069221
+____________________________ test_hw_mode_sequence _____________________________
+----------------------------- Captured stdout call -----------------------------
+HW after I2C_S_100KHZ 5A 02 40 0A: mode=0x40 (I2C_S_100KHZ)
+HW IO_CHANGE 5a 02 10 0f raw response: ff 00
+HW after IO_CHANGE 5A 02 10 0F: mode=0x40 (I2C_S_100KHZ)
+HW after IO_MODE 5A 02 00 AA: mode=0x00 (IO_MODE)
+HW after restore 5A 02 40 0A: mode=0x40 (I2C_S_100KHZ)
+__________________________ test_hw_io_getpins_setpins __________________________
+----------------------------- Captured stdout call -----------------------------
+HW after IO_MODE 5A 02 00 AA: mode=0x00 (IO_MODE)
+HW GETPINS 64 raw response: 0e
+HW SETPINS 63 0f raw response: 00
+HW GETPINS 64 raw response: 0e
+--------------------------- Captured stdout teardown ---------------------------
+HW after restore 5A 02 40 AA: mode=0x40 (I2C_S_100KHZ)
+__________________________ test_hw_io_getad_analogue ___________________________
+----------------------------- Captured stdout call -----------------------------
+HW after IO_MODE 5A 02 00 FF: mode=0x00 (IO_MODE)
+HW GETAD channel 1: 733
+HW GETAD channel 2: 743
+HW GETAD channel 3: 765
+HW GETAD channel 4: 692
+HW GETAD out-of-range 0 65 00 raw response: 00 00
+HW GETAD out-of-range 5 65 05 raw response: 00 00
+--------------------------- Captured stdout teardown ---------------------------
+HW after restore 5A 02 40 AA: mode=0x40 (I2C_S_100KHZ)
+___________________________ test_mock_serial_rx_cap ____________________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:44 MockTransport: serial rx overflow, dropped 3e 3f 40 41 42 43 44 45
+___________________ test_mock_serial_io_outside_serial_mode ____________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:80 MockTransport: SERIAL_IO outside serial mode dropped
+_____________________ test_mock_unhandled_returns_nothing ______________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:217 MockTransport: unhandled request 5a 10
+WARNING  usb_iss_app.mock:mock.py:217 MockTransport: unhandled request 40
+WARNING  usb_iss_app.mock:mock.py:217 MockTransport: unhandled request 00
+________________________ test_mock_unhandled_then_valid ________________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:217 MockTransport: unhandled request 5a 7f
+_______________ test_mock_unknown_nack_reason_5_through_set_mode _______________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:217 MockTransport: unhandled request 00
+__________________ test_mock_unknown_subcommand_still_dropped __________________
+------------------------------ Captured log call -------------------------------
+WARNING  usb_iss_app.mock:mock.py:217 MockTransport: unhandled request 5a 7f
+- generated xml file: /home/chris/claude/USB-ISS_App/docs/iterations/02/logs/review-hw-20261017-014137.xml -
+=========================== short test summary info ============================
+PASSED tests/test_hw.py::test_hw_version
+PASSED tests/test_hw.py::test_hw_serial
+PASSED tests/test_hw.py::test_hw_mode_sequence
+PASSED tests/test_hw.py::test_hw_io_getpins_setpins
+PASSED tests/test_hw.py::test_hw_io_getad_analogue
+PASSED tests/test_io.py::test_constants
+PASSED tests/test_io.py::test_serial_io_frames
+PASSED tests/test_io.py::test_serial_io_31_refused
+PASSED tests/test_io.py::test_serial_header
+PASSED tests/test_io.py::test_serial_header_errors[-IssTimeout]
+PASSED tests/test_io.py::test_serial_header_errors[\xff\x00-IssTimeout]
+PASSED tests/test_io.py::test_serial_header_errors[\x01\x00\x00-IssProtocolError]
+PASSED tests/test_io.py::test_serial_header_errors[\xfe\x00\x00-IssProtocolError]
+PASSED tests/test_io.py::test_serial_header_errors[\xff\x1f\x00-IssProtocolError]
+PASSED tests/test_io.py::test_serial_header_errors[\xff\x00?-IssProtocolError]
+PASSED tests/test_io.py::test_serial_io_ack_with_rx[0]
+PASSED tests/test_io.py::test_serial_io_ack_with_rx[62]
+PASSED tests/test_io.py::test_serial_io_nack_still_returns_rx
+PASSED tests/test_io.py::test_serial_io_short_rx_body
+PASSED tests/test_io.py::test_pin_frames
+PASSED tests/test_io.py::test_set_pins_range[-1]
+PASSED tests/test_io.py::test_set_pins_range[16]
+PASSED tests/test_io.py::test_set_pins_range[255]
+PASSED tests/test_io.py::test_get_ad_channel_range[0]
+PASSED tests/test_io.py::test_get_ad_channel_range[5]
+PASSED tests/test_io.py::test_get_ad_channel_range[-1]
+PASSED tests/test_io.py::test_parse_set_pins
+PASSED tests/test_io.py::test_iss_nack_mode_behaviour_unchanged
+PASSED tests/test_io.py::test_parse_get_pins
+PASSED tests/test_io.py::test_parse_get_ad[02 A6-678]
+PASSED tests/test_io.py::test_parse_get_ad[00 3D-61]
+PASSED tests/test_io.py::test_parse_get_ad[03 FF-1023]
+PASSED tests/test_io.py::test_parse_get_ad[00 00-0]
+PASSED tests/test_io.py::test_parse_get_ad_errors
+PASSED tests/test_io.py::test_mock_power_up_all_inputs
+PASSED tests/test_io.py::test_mock_inputs_follow_levels
+PASSED tests/test_io.py::test_mock_outputs_and_setpins
+PASSED tests/test_io.py::test_mock_io_type_reapplied_resets_outputs
+PASSED tests/test_io.py::test_mock_setpins_nack_hook
+PASSED tests/test_io.py::test_mock_setpins_no_outputs_acks
+PASSED tests/test_io.py::test_mock_getad
+PASSED tests/test_io.py::test_mock_getad_digital_pin_is_zero
+PASSED tests/test_io.py::test_mock_general_pins_by_mode
+PASSED tests/test_io.py::test_mock_spi_and_i2c_serial_keep_io_type
+PASSED tests/test_io.py::test_mock_serial_poll_empty
+PASSED tests/test_io.py::test_mock_serial_send_30
+PASSED tests/test_io.py::test_mock_serial_nack_when_full
+PASSED tests/test_io.py::test_mock_serial_rx_cap
+PASSED tests/test_io.py::test_mock_serial_nack_carries_rx
+PASSED tests/test_io.py::test_mock_serial_works_in_i2c_serial
+PASSED tests/test_io.py::test_mock_serial_io_outside_serial_mode
+PASSED tests/test_io.py::test_mock_serial_payload_5a01_is_data
+PASSED tests/test_iss.py::test_version_mock_defaults
+PASSED tests/test_iss.py::test_version_request_bytes
+PASSED tests/test_iss.py::test_version_configurable
+PASSED tests/test_iss.py::test_version_short_response
+PASSED tests/test_iss.py::test_version_bad_module_id
+PASSED tests/test_iss.py::test_serial_mock_default
+PASSED tests/test_iss.py::test_serial_request_bytes
+PASSED tests/test_iss.py::test_serial_short_response
+PASSED tests/test_iss.py::test_serial_non_digit[1234567A]
+PASSED tests/test_iss.py::test_serial_non_digit[1234567/]
+PASSED tests/test_iss.py::test_serial_non_digit[1234567:]
+PASSED tests/test_iss.py::test_serial_non_digit[\x001234567]
+PASSED tests/test_iss.py::test_mock_unhandled_returns_nothing
+PASSED tests/test_iss.py::test_mock_unhandled_then_valid
+PASSED tests/test_iss.py::test_mock_close
+PASSED tests/test_mode.py::test_decode_mode[0-IO_MODE]
+PASSED tests/test_mode.py::test_decode_mode[1-IO_MODE+SERIAL]
+PASSED tests/test_mode.py::test_decode_mode[32-I2C_S_20KHZ]
+PASSED tests/test_mode.py::test_decode_mode[48-I2C_S_50KHZ]
+PASSED tests/test_mode.py::test_decode_mode[64-I2C_S_100KHZ]
+PASSED tests/test_mode.py::test_decode_mode[80-I2C_S_400KHZ]
+PASSED tests/test_mode.py::test_decode_mode[96-I2C_H_100KHZ]
+PASSED tests/test_mode.py::test_decode_mode[112-I2C_H_400KHZ]
+PASSED tests/test_mode.py::test_decode_mode[128-I2C_H_1000KHZ]
+PASSED tests/test_mode.py::test_decode_mode[97-I2C_H_100KHZ+SERIAL]
+PASSED tests/test_mode.py::test_decode_mode[33-I2C_S_20KHZ+SERIAL]
+PASSED tests/test_mode.py::test_decode_mode[129-I2C_H_1000KHZ+SERIAL]
+PASSED tests/test_mode.py::test_decode_mode[144-SPI_MODE phase 0]
+PASSED tests/test_mode.py::test_decode_mode[146-SPI_MODE phase 2]
+PASSED tests/test_mode.py::test_decode_mode[147-SPI_MODE phase 3]
+PASSED tests/test_mode.py::test_decode_unknown[2]
+PASSED tests/test_mode.py::test_decode_unknown[17]
+PASSED tests/test_mode.py::test_decode_unknown[66]
+PASSED tests/test_mode.py::test_decode_unknown[148]
+PASSED tests/test_mode.py::test_decode_unknown[255]
+PASSED tests/test_mode.py::test_decode_unknown[160]
+PASSED tests/test_mode.py::test_mode_constants
+PASSED tests/test_mode.py::test_io_type_examples
+PASSED tests/test_mode.py::test_io_type_rejects_bad_pin
+PASSED tests/test_mode.py::test_baud_table[300-9999-39-15]
+PASSED tests/test_mode.py::test_baud_table[1200-2499-9-195]
+PASSED tests/test_mode.py::test_baud_table[2400-1249-4-225]
+PASSED tests/test_mode.py::test_baud_table[9600-311-1-55]
+PASSED tests/test_mode.py::test_baud_table[19200-155-0-155]
+PASSED tests/test_mode.py::test_baud_table[38400-77-0-77]
+PASSED tests/test_mode.py::test_baud_table[57600-51-0-51]
+PASSED tests/test_mode.py::test_baud_table[115200-25-0-25]
+PASSED tests/test_mode.py::test_baud_115200
+PASSED tests/test_mode.py::test_baud_refused[460800]
+PASSED tests/test_mode.py::test_baud_refused[1]
+PASSED tests/test_mode.py::test_baud_refused[10000000]
+PASSED tests/test_mode.py::test_baud_refused[0]
+PASSED tests/test_mode.py::test_baud_refused[-9600]
+PASSED tests/test_mode.py::test_spi_divisor[3000000-1]
+PASSED tests/test_mode.py::test_spi_divisor[500000-11]
+PASSED tests/test_mode.py::test_spi_divisor[23437.5-255]
+PASSED tests/test_mode.py::test_spi_divisor_rounds_down_in_frequency
+PASSED tests/test_mode.py::test_spi_refused[4000000]
+PASSED tests/test_mode.py::test_spi_refused[20000]
+PASSED tests/test_mode.py::test_spi_refused[0]
+PASSED tests/test_mode.py::test_spi_refused[-1]
+PASSED tests/test_mode.py::test_spi_refused[23437.4]
+PASSED tests/test_mode.py::test_frames_datasheet_examples
+PASSED tests/test_mode.py::test_spi_frame_phase_and_divisor
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[0]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[16_0]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[144_0]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[97]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[16_1]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[144_1]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[256]
+PASSED tests/test_mode.py::test_i2c_builders_reject_non_i2c[-1]
+PASSED tests/test_mode.py::test_spi_phase_rejected[-1]
+PASSED tests/test_mode.py::test_spi_phase_rejected[4]
+PASSED tests/test_mode.py::test_io_type_byte_rejected[-1]
+PASSED tests/test_mode.py::test_io_type_byte_rejected[256]
+PASSED tests/test_mode.py::test_parse_ok
+PASSED tests/test_mode.py::test_parse_protocol_error[\xff\x01]
+PASSED tests/test_mode.py::test_parse_protocol_error[\x00\x04]
+PASSED tests/test_mode.py::test_parse_protocol_error[\x00\x00]
+PASSED tests/test_mode.py::test_parse_protocol_error[\x00\x08]
+PASSED tests/test_mode.py::test_parse_protocol_error[\x01\x00]
+PASSED tests/test_mode.py::test_parse_protocol_error[\xfe\x00]
+PASSED tests/test_mode.py::test_parse_short[]
+PASSED tests/test_mode.py::test_parse_short[\xff]
+PASSED tests/test_mode.py::test_parse_short[\x00]
+PASSED tests/test_mode.py::test_parse_nack[5-Unknown command]
+PASSED tests/test_mode.py::test_parse_nack[6-Internal Error 1]
+PASSED tests/test_mode.py::test_parse_nack[7-Internal Error 2]
+PASSED tests/test_mode.py::test_set_mode_writes_frame_and_reads_two
+PASSED tests/test_mode.py::test_set_mode_short_response
+PASSED tests/test_mode.py::test_mock_io_serial_framing_ignores_payload_bytes
+PASSED tests/test_mode.py::test_mock_waits_for_whole_frame
+PASSED tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x00\xaa-0]
+PASSED tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x01\x00\x9b\xb0-1]
+PASSED tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02P\n-80]
+PASSED tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x81\x017-129]
+PASSED tests/test_mode.py::test_mock_mode_set_reflected_in_version[Z\x02\x92\x0b-146]
+PASSED tests/test_mode.py::test_mock_io_change_keeps_mode
+PASSED tests/test_mode.py::test_mock_unknown_mode_nack
+PASSED tests/test_mode.py::test_mock_forced_nack_through_set_mode[6]
+PASSED tests/test_mode.py::test_mock_forced_nack_through_set_mode[7]
+PASSED tests/test_mode.py::test_mock_unknown_nack_reason_5_through_set_mode
+PASSED tests/test_mode.py::test_mock_unknown_subcommand_still_dropped
+PASSED tests/test_mode.py::test_default_timeout_is_500ms
+PASSED tests/test_mode.py::test_serial_transport_constructor_timeout_applies
+PASSED tests/test_mode.py::test_serial_transport_default_timeout
+PASSED tests/test_run_tests.py::test_unique_path_never_overwrites
+PASSED tests/test_run_tests.py::test_hw_without_port_refuses
+PASSED tests/test_run_tests.py::test_filter_porcelain_ignores_logs
+PASSED tests/test_transport.py::test_env_parser
+PASSED tests/test_transport.py::test_find_port_env_wins
+FAILED tests/test_hw.py::test_hw_io_getad_on_digital_pin - AssertionError: as...
+======================== 1 failed, 164 passed in 3.33s =========================
+======================================================================
+exit code: 1
