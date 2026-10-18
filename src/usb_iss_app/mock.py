@@ -9,6 +9,27 @@ from .transport import DEFAULT_TIMEOUT, Transport
 log = logging.getLogger(__name__)
 
 
+class MockI2cDevice:
+    """A test-defined I2C slave: memory plus a pointer that post-increments and wraps at size."""
+
+    def __init__(self, size: int = 256):
+        self.size = size
+        self.mem = bytearray(size)
+        self.pointer = 0
+
+    def write(self, data: bytes) -> None:
+        for b in data:
+            self.mem[self.pointer] = b
+            self.pointer = (self.pointer + 1) % self.size
+
+    def read(self, n: int) -> bytes:
+        out = bytearray()
+        for _ in range(n):
+            out.append(self.mem[self.pointer])
+            self.pointer = (self.pointer + 1) % self.size
+        return bytes(out)
+
+
 class MockTransport(Transport):
     def __init__(self, firmware: int = 0x09, mode: int = 0x40, serial: str = "00000001"):
         self.firmware = firmware
@@ -31,6 +52,7 @@ class MockTransport(Transport):
         self.hold_serial_tx = False  # test-only: keep accepted bytes pending
         self._tx_pending = bytearray()
         self._serial_rx = bytearray()
+        self.i2c_devices: dict[int, MockI2cDevice] = {}  # keyed by even 8-bit address; empty like the bench bus
 
     def force_next_setpins_nack(self) -> None:
         """Test-only: the next SETPINS is consumed and answered 00."""
@@ -174,6 +196,66 @@ class MockTransport(Transport):
         del self._tx[:n]
         return True
 
+    @staticmethod
+    def _i2c_frame_len(tx: bytearray) -> int | None:
+        """Total length of the I2C frame at the head of tx, pp.10-15; None if not yet known."""
+        cmd = tx[0]
+        if cmd == iss.I2C_TEST:
+            return 2
+        if len(tx) < 2:
+            return None
+        read = bool(tx[1] & 1)
+        if cmd == iss.I2C_SGL:
+            return 2 if read else 3
+        if cmd == iss.I2C_AD0:
+            return 3 if read else (3 + tx[2] if len(tx) >= 3 else None)
+        if cmd == iss.I2C_AD1:
+            return 4 if read else (4 + tx[3] if len(tx) >= 4 else None)
+        # I2C_AD2
+        return 5 if read else (5 + tx[4] if len(tx) >= 5 else None)
+
+    def _i2c_command(self) -> bool:
+        """I2C_SGL/AD0/AD1/AD2/TEST, pp.10-15. False if the frame is still incomplete."""
+        n = self._i2c_frame_len(self._tx)
+        if n is None or len(self._tx) < n:
+            return False  # wait for the whole frame; its bytes are never commands
+        frame = bytes(self._tx[:n])
+        del self._tx[:n]
+        if not (self.mode in iss.I2C_MODES or self.mode & ~iss.SERIAL in iss.I2C_MODES and self.mode & iss.SERIAL):
+            # ASSUMPTION: outside the I2C modes the frame is consumed and dropped with no reply
+            # (hardware step 4 of NEXT 03 records the real behaviour for I2C_TEST).
+            self.unhandled.append(frame)
+            log.warning("MockTransport: I2C command outside I2C mode dropped")
+            return True
+        cmd = frame[0]
+        read = bool(frame[1] & 1)
+        dev = self.i2c_devices.get(frame[1] & 0xFE)
+        if cmd == iss.I2C_TEST:
+            # ASSUMPTION: FF for "non-zero" (p.15).
+            self._rx.append(0xFF if dev else 0x00)
+            return True
+        if cmd == iss.I2C_SGL:
+            count, data = 1, frame[2:]
+        elif cmd == iss.I2C_AD0:
+            count, data = frame[2], frame[3:]
+        elif cmd == iss.I2C_AD1:
+            count, data = frame[3], frame[4:]
+            if dev:
+                dev.pointer = frame[2] % dev.size
+        else:
+            count, data = frame[4], frame[5:]
+            if dev:
+                dev.pointer = (frame[2] << 8 | frame[3]) % dev.size
+        if read:
+            # ASSUMPTION: an absent device reads as FF, the 4.7k pull-ups (p.3) holding SDA high.
+            self._rx += dev.read(count) if dev else b"\xff" * count
+        elif dev:
+            dev.write(data)
+            self._rx.append(0xFF)  # ASSUMPTION: the datasheet only says "non-zero"
+        else:
+            self._rx.append(0x00)
+        return True
+
     def write(self, data: bytes) -> None:
         self._tx += data
         self._process()
@@ -196,6 +278,10 @@ class MockTransport(Transport):
                 else:
                     self._rx += self._getad(self._tx[1])
                 del self._tx[:2]
+                continue
+            if head in (iss.I2C_SGL, iss.I2C_AD0, iss.I2C_AD1, iss.I2C_AD2, iss.I2C_TEST):
+                if not self._i2c_command():
+                    return
                 continue
             if self._tx[0] != 0x5A or len(self._tx) < 2:
                 if self._tx[0] == 0x5A:

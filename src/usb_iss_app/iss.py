@@ -24,7 +24,7 @@ class IssProtocolError(IssError):
 
 
 class IssNack(IssError):
-    """A command answered NACK: ISS_MODE (00 rr, datasheet p.6) or SETPINS (00, p.20; reason is None)."""
+    """A command answered NACK: ISS_MODE (00 rr, datasheet p.6), or SETPINS (00, p.20) or an I2C write (00, pp.10-13); reason is None for the last two."""
 
     def __init__(self, reason: int | None = None, command: str = "ISS_MODE"):
         self.reason = reason
@@ -352,3 +352,151 @@ def parse_get_ad(resp: bytes) -> int:
 def get_ad(transport: Transport, channel: int) -> int:
     transport.write(build_get_ad(channel))
     return parse_get_ad(transport.read(2))
+
+
+# ---- I2C_SGL, I2C_AD0, I2C_AD1, I2C_AD2, I2C_TEST, datasheet pp.10-15 (PDF page numbers, as in NEXT 03; D-006) ----
+I2C_SGL = 0x53
+I2C_AD0 = 0x54
+I2C_AD1 = 0x55
+I2C_AD2 = 0x56
+I2C_TEST = 0x58
+I2C_AD0_MAX = 60  # D-006: the datasheet gives no limit; same as I2C_AD1
+I2C_AD1_MAX = 60  # p.12 (printed p.13), reads and writes
+I2C_AD2_WRITE_MAX = 59  # p.13 (printed p.14): "so as not to overflow the 64 byte internal buffer"
+I2C_AD2_READ_MAX = 64  # p.13 (printed p.14)
+
+
+def _i2c_addr(addr: int) -> int:
+    """Datasheet 8-bit form: the even write address (pp.10-13)."""
+    if not 0 <= addr <= 0xFE or addr & 1:
+        raise ValueError(f"I2C address 0x{addr:X} is not even and in 0x00-0xFE")
+    return addr
+
+
+def _i2c_count(n: int, limit: int, name: str) -> int:
+    if not 1 <= n <= limit:
+        raise ValueError(f"{name}: byte count {n} outside 1-{limit}")
+    return n
+
+
+def _i2c_reg(reg: int, top: int, name: str) -> int:
+    if not 0 <= reg <= top:
+        raise ValueError(f"{name}: register 0x{reg:X} outside 0x00-0x{top:X}")
+    return reg
+
+
+# I2C_SGL, p.10: 53 addr value (write); p.11: 53 addr+1 (read, add 1 to the device address).
+def build_i2c_sgl_write(addr: int, value: int) -> bytes:
+    return bytes([I2C_SGL, _i2c_addr(addr), _byte(value, "I2C_SGL value")])
+
+
+def build_i2c_sgl_read(addr: int) -> bytes:
+    return bytes([I2C_SGL, _i2c_addr(addr) | 1])
+
+
+# I2C_AD0, p.11: 54 addr n data... (write); 54 addr+1 n (read).
+def build_i2c_ad0_write(addr: int, data: bytes) -> bytes:
+    n = _i2c_count(len(data), I2C_AD0_MAX, "I2C_AD0")
+    return bytes([I2C_AD0, _i2c_addr(addr), n]) + bytes(data)
+
+
+def build_i2c_ad0_read(addr: int, n: int) -> bytes:
+    return bytes([I2C_AD0, _i2c_addr(addr) | 1, _i2c_count(n, I2C_AD0_MAX, "I2C_AD0")])
+
+
+# I2C_AD1, p.12: 55 addr reg n data... (write); 55 addr+1 reg n (read).
+def build_i2c_ad1_write(addr: int, reg: int, data: bytes) -> bytes:
+    n = _i2c_count(len(data), I2C_AD1_MAX, "I2C_AD1")
+    return bytes([I2C_AD1, _i2c_addr(addr), _i2c_reg(reg, 0xFF, "I2C_AD1"), n]) + bytes(data)
+
+
+def build_i2c_ad1_read(addr: int, reg: int, n: int) -> bytes:
+    return bytes([I2C_AD1, _i2c_addr(addr) | 1, _i2c_reg(reg, 0xFF, "I2C_AD1"),
+                  _i2c_count(n, I2C_AD1_MAX, "I2C_AD1")])
+
+
+# I2C_AD2, p.13: 56 addr regH regL n data... (write); 56 addr+1 regH regL n (read). High byte first.
+def build_i2c_ad2_write(addr: int, reg: int, data: bytes) -> bytes:
+    n = _i2c_count(len(data), I2C_AD2_WRITE_MAX, "I2C_AD2 write")
+    _i2c_reg(reg, 0xFFFF, "I2C_AD2")
+    return bytes([I2C_AD2, _i2c_addr(addr), reg >> 8, reg & 0xFF, n]) + bytes(data)
+
+
+def build_i2c_ad2_read(addr: int, reg: int, n: int) -> bytes:
+    _i2c_reg(reg, 0xFFFF, "I2C_AD2")
+    return bytes([I2C_AD2, _i2c_addr(addr) | 1, reg >> 8, reg & 0xFF,
+                  _i2c_count(n, I2C_AD2_READ_MAX, "I2C_AD2 read")])
+
+
+# I2C_TEST, p.15: 58 addr; reply 00 if the device is absent, non-zero if it is present.
+def build_i2c_test(addr: int) -> bytes:
+    return bytes([I2C_TEST, _i2c_addr(addr)])
+
+
+def parse_i2c_write(resp: bytes, command: str) -> None:
+    """Every I2C write, pp.10-13: 00 if the write failed, non-zero if it succeeded."""
+    if len(resp) < 1:
+        raise IssTimeout(f"{command}: expected 1 byte, got 0")
+    if resp[0] == 0x00:
+        raise IssNack(None, command)
+
+
+def parse_i2c_read(resp: bytes, n: int) -> bytes:
+    # The datasheet defines no status byte for reads, so a read from an absent device
+    # can't be detected from the response.
+    if len(resp) < n:
+        raise IssTimeout(f"I2C read: expected {n} bytes, got {len(resp)}")
+    return bytes(resp[:n])
+
+
+def parse_i2c_test(resp: bytes) -> bool:
+    if len(resp) < 1:
+        raise IssTimeout("I2C_TEST: expected 1 byte, got 0")
+    return resp[0] != 0x00
+
+
+def _i2c_write(transport: Transport, frame: bytes, command: str) -> None:
+    transport.write(frame)
+    parse_i2c_write(transport.read(1), command)
+
+
+def _i2c_read(transport: Transport, frame: bytes, n: int) -> bytes:
+    transport.write(frame)
+    return parse_i2c_read(transport.read(n), n)
+
+
+def i2c_sgl_write(transport: Transport, addr: int, value: int) -> None:
+    _i2c_write(transport, build_i2c_sgl_write(addr, value), "I2C_SGL")
+
+
+def i2c_sgl_read(transport: Transport, addr: int) -> int:
+    return _i2c_read(transport, build_i2c_sgl_read(addr), 1)[0]
+
+
+def i2c_ad0_write(transport: Transport, addr: int, data: bytes) -> None:
+    _i2c_write(transport, build_i2c_ad0_write(addr, data), "I2C_AD0")
+
+
+def i2c_ad0_read(transport: Transport, addr: int, n: int) -> bytes:
+    return _i2c_read(transport, build_i2c_ad0_read(addr, n), n)
+
+
+def i2c_ad1_write(transport: Transport, addr: int, reg: int, data: bytes) -> None:
+    _i2c_write(transport, build_i2c_ad1_write(addr, reg, data), "I2C_AD1")
+
+
+def i2c_ad1_read(transport: Transport, addr: int, reg: int, n: int) -> bytes:
+    return _i2c_read(transport, build_i2c_ad1_read(addr, reg, n), n)
+
+
+def i2c_ad2_write(transport: Transport, addr: int, reg: int, data: bytes) -> None:
+    _i2c_write(transport, build_i2c_ad2_write(addr, reg, data), "I2C_AD2")
+
+
+def i2c_ad2_read(transport: Transport, addr: int, reg: int, n: int) -> bytes:
+    return _i2c_read(transport, build_i2c_ad2_read(addr, reg, n), n)
+
+
+def i2c_test(transport: Transport, addr: int) -> bool:
+    transport.write(build_i2c_test(addr))
+    return parse_i2c_test(transport.read(1))

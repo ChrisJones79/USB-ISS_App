@@ -92,3 +92,18 @@ def test_hw_io_getad_analogue(io_hw):
         assert 0 <= v <= 1023
     for ch in (0, 5):
         assert raw(f"GETAD out-of-range {ch}", bytes([0x65, ch]), 3) == b"\x00\x00"
+
+
+def test_hw_i2c_empty_bus(io_hw):
+    """NEXT 03 hardware steps 1-5. Empty bus; no I2C write command is sent. Raw responses are logged, not asserted."""
+    hw, mode_byte, raw = io_hw
+    iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
+    assert mode_byte("I2C_S_100KHZ 5A 02 40 AA") == 0x40
+    for addr in (0xA0, 0x66):  # 0x66 is the MLX90640's 0x33 in 8-bit form; not on this bus
+        assert len(raw(f"I2C_TEST {addr:02X}", iss.build_i2c_test(addr), 2)) == 1
+    raw("I2C_AD1 read empty bus", iss.build_i2c_ad1_read(0xA0, 0x00, 1), 3)
+    assert mode_byte("after I2C_AD1 read") == 0x40
+    iss.set_mode(hw, iss.build_io_mode(0xAA))
+    assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+    raw("I2C_TEST A0 in IO_MODE", iss.build_i2c_test(0xA0), 2)
+    assert mode_byte("after I2C_TEST in IO_MODE") == 0x00
