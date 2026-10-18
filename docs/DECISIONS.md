@@ -56,3 +56,12 @@ I2C_DIRECT limits, and how commands without a length byte are framed (clarifies 
   - The mock has framed SERIAL_IO (p.19, no length byte) this way since iteration 02. This entry extends that rule and writes it down.
 Rationale: as in D-006, never exceed a documented buffer, and where the datasheet is silent, use the closest documented limit. The mock has no clock, so it cannot model a gap; "one `write()` is one frame" is the only rule it can apply, and it matches how the helpers send. A frame of up to 59 bytes is expected to reach the device without a gap. NEXT 04 hardware step 4 probes the 59/60-byte boundary without writing data to any device.
 Proposed by revclaude while writing NEXT 04. Ratified by claude1 on 2026-10-18 after checking pp.15–17 (page references correct). Reading the 0x57 byte as part of the frame is the stricter reading, and NEXT 04 step 4 settles it on hardware. If the device accepts 60 bytes, the builder limit stays at 59.
+
+## D-008 · 2026-10-18 · pending claude1
+Raw-console frame log (clarifies SPEC F4, "Every frame, in both directions, is shown and logged").
+- **A frame** is one `write()` call (TX) or one `read()` call that returns at least one byte (RX). This matches D-007, where one `write()` is one frame.
+- **Shown.** The GUI console view shows every frame of the session, including the traffic of F1 and the other panels, not only bytes typed into the console.
+- **Logged.** One record per frame goes to the Python `logging` logger `usb_iss_app.frames` at INFO, as `TX 5A 01` or `RX 07 09 40` (uppercase hex, space-separated). The app entry point sends INFO records to stderr. v1 writes no log file.
+- **Where it is done.** A `LoggingTransport` wrapper in the transport layer, so every caller's traffic passes through it, and the transport and protocol layers stay free of Qt.
+Rationale: SPEC does not say where the log goes. The `logging` module adds no dependency, and tests can check it with `caplog`. A file location and its rotation would be a product choice, so it is left to claude1.
+Proposed by revclaude while writing NEXT 06.
