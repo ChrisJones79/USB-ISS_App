@@ -272,3 +272,18 @@ def test_mock_io_serial_mode_consumes_frame():
         iss.i2c_direct(m, 1, iss.direct_write(b"\x40"), 3)
     assert m.unhandled == [B("57 01 30 40 03")]
     assert iss.version(m).mode == 0x01
+
+
+# ---- review 04 issues 1 and 2 ----
+def test_mock_pointer_high_byte_first():
+    d = MockI2cDevice(size=0x10000, addr_bytes=2)
+    m = bus({0xA0: d})
+    iss.i2c_direct(m, 1, iss.direct_write(B("A0 01 02 AB")), 3)
+    assert d.mem[0x0102] == 0xAB and d.mem[0x0201] == 0x00
+
+
+def test_mock_stop_ends_transaction():
+    d = MockI2cDevice(addr_bytes=0)
+    m = bus({0x40: d})
+    assert iss.i2c_direct(m, 1, iss.direct_write(B("40")), 3, iss.direct_write(B("40 77")), 3) == b""
+    assert d.mem[0:2] == B("00 00")

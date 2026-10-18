@@ -58,6 +58,14 @@ class MockI2cDevice:
         return bytes(out)
 
 
+class MockSpiDevice:
+    """A test-defined SPI slave (p.17). Subclasses override transfer()."""
+
+    def transfer(self, data: bytes) -> bytes:
+        """One CE-low period: byte i of the result is what the device shifts out while it receives byte i."""
+        return b"\xff" * len(data)
+
+
 class MockTransport(Transport):
     def __init__(self, firmware: int = 0x09, mode: int = 0x40, serial: str = "00000001"):
         self.firmware = firmware
@@ -81,6 +89,7 @@ class MockTransport(Transport):
         self._tx_pending = bytearray()
         self._serial_rx = bytearray()
         self.i2c_devices: dict[int, MockI2cDevice] = {}  # keyed by even 8-bit address; empty like the bench bus
+        self.spi_device: MockSpiDevice | None = None
 
     def _is_i2c_mode(self) -> bool:
         return self.mode in iss.I2C_MODES or bool(self.mode & iss.SERIAL and self.mode & ~iss.SERIAL in iss.I2C_MODES)
@@ -354,6 +363,30 @@ class MockTransport(Transport):
             # not 00 04 as p.15 suggests. ASSUMPTION: the same for every other unknown sub-command.
         self._rx += bytes([0xFF, len(out)]) + out
 
+    def _spi_command(self) -> None:
+        """SPI, p.17; D-007. The whole of _tx is the frame."""
+        # ASSUMPTION (D-007): no length byte, so the frame runs from 61 to the end of the write() call.
+        frame = bytes(self._tx)
+        self._tx.clear()
+        if not iss.SPI_MODE <= self.mode <= iss.SPI_MODE | 3:
+            # Iterations 03 and 04 found IO_MODE answering I2C_TEST and I2C_DIRECT with a single 00; SPI has not
+            # been tried. ASSUMPTION: outside the SPI modes the frame is consumed and dropped with no reply.
+            self.unhandled.append(frame)
+            log.warning("MockTransport: SPI outside SPI mode dropped")
+            return
+        data = frame[1:]
+        if len(frame) > iss.SPI_FRAME_MAX:
+            # ASSUMPTION: the datasheet doesn't say what the device does with an over-long frame.
+            self._rx.append(0x00)
+            return
+        if not data:
+            self._rx.append(0xFF)  # ASSUMPTION: one byte sent, one byte back (p.17)
+            return
+        # ASSUMPTION: one frame is one CE-low period, so one transfer() call (needed by the p.17 23K256 examples).
+        # ASSUMPTION: with nothing attached SDI floats and reads FF, as for the empty I2C bus.
+        out = self.spi_device.transfer(data) if self.spi_device else b"\xff" * len(data)
+        self._rx += b"\xff" + out
+
     def write(self, data: bytes) -> None:
         self._tx += data
         self._process()
@@ -366,6 +399,9 @@ class MockTransport(Transport):
                 return
             if head == iss.I2C_DIRECT:
                 self._direct_command()
+                return
+            if head == iss.SPI_IO:
+                self._spi_command()
                 return
             if head == iss.GETPINS:
                 self._rx.append(self._getpins())
