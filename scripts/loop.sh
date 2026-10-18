@@ -7,6 +7,8 @@
 #     MAX_ACCEPTS=4        stop after this many accepted iterations (default 4)
 #     NTFY_TOPIC=<topic>   also push stop notices to https://ntfy.sh/<topic>
 #     BUILDER_MODEL / REVIEWER_MODEL   defaults: sonnet / opus
+#     RESUME_REVIEW=iter/NN  skip the first build and start by reviewing that existing branch
+#                            (use after a stop that happened between a finished build and its review)
 #
 # The loop never touches the bench. It stops and notifies on: a Rethink, a checkpoint,
 # a second consecutive Fix, a builder blocker, a reviewer "needs_chris", a NEXT whose hardware
@@ -45,7 +47,13 @@ finish() {
   fi
   exit 0
 }
-json_field() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2], {"json": json}, {"d": d}))' "$@"; }
+# --output-format json may be a single result object or (CLI 2.1.295) the full message list; use the "result" message.
+json_field() { python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+if isinstance(d, list):
+    d=next((m for m in reversed(d) if isinstance(m, dict) and m.get("type")=="result"), {})
+print(eval(sys.argv[2], {"json": json}, {"d": d}))' "$@"; }
 pending_claude1() { grep -Eq '^## D-[0-9]+ .*pending claude1' docs/DECISIONS.md; }
 
 BUILD_SCHEMA='{"type":"object","properties":{
@@ -79,7 +87,7 @@ run_claude() {  # $1=label $2=model $3=effort $4=schema $5=prompt
   local rc=$?
   [ $rc -ne 0 ] && finish "$1 exited $rc (see $WORK/$1.stderr)"
   [ "$(json_field "$out" 'd.get("is_error", False)')" = "True" ] && finish "$1 reported an error"
-  say "$1 cost (estimate, USD): $(json_field "$out" 'd.get("total_cost_usd")')"
+  say "$1 cost (estimate, USD): $(json_field "$out" 'd.get("total_cost_usd")'); turns $(json_field "$out" 'd.get("num_turns")'); permission denials: $(json_field "$out" 'len(d.get("permission_denials") or [])')"
   json_field "$out" 'json.dumps(d["structured_output"])' > "$WORK/$1.status.json" 2>/dev/null \
     || finish "$1 returned no structured output"
 }
@@ -96,15 +104,23 @@ grep -q '^No task' docs/NEXT.md && { echo "NEXT.md has no task"; exit 1; }
 
 accepts=0; fixes=0
 while :; do
-  # ---- build ----
-  run_claude "b$accepts-$fixes-build" "$BUILDER_MODEL" "$(next_effort)" "$BUILD_SCHEMA" "/build"
-  B="b$accepts-$fixes-build"
-  [ "$(s $B status)" = built ] || finish "builder blocked: $(s $B blocker)"
-  NN="$(s $B iteration)"; BR="$(s $B branch)"
-  [ -z "$(git status --porcelain)" ] || finish "builder left the tree dirty"
-  [ "$(git rev-parse --abbrev-ref HEAD)" = "$BR" ] || finish "builder ended on $(git rev-parse --abbrev-ref HEAD), reported $BR"
-  git push -q -u origin "$BR" || finish "push of $BR failed"
-  say "iteration $NN cycle $(s $B cycle) built and pushed ($BR)"
+  if [ -n "${RESUME_REVIEW:-}" ]; then
+    # ---- resume: the build already exists on this branch ----
+    BR="$RESUME_REVIEW"; NN="${BR#iter/}"; RESUME_REVIEW=""
+    git rev-parse -q --verify "refs/heads/$BR" >/dev/null || finish "RESUME_REVIEW branch $BR not found"
+    git push -q -u origin "$BR" || finish "push of $BR failed"
+    say "resuming: review of existing build on $BR (pushed)"
+  else
+    # ---- build ----
+    run_claude "b$accepts-$fixes-build" "$BUILDER_MODEL" "$(next_effort)" "$BUILD_SCHEMA" "/build"
+    B="b$accepts-$fixes-build"
+    [ "$(s $B status)" = built ] || finish "builder blocked: $(s $B blocker)"
+    NN="$(s $B iteration)"; BR="$(s $B branch)"
+    [ -z "$(git status --porcelain)" ] || finish "builder left the tree dirty"
+    [ "$(git rev-parse --abbrev-ref HEAD)" = "$BR" ] || finish "builder ended on $(git rev-parse --abbrev-ref HEAD), reported $BR"
+    git push -q -u origin "$BR" || finish "push of $BR failed"
+    say "iteration $NN cycle $(s $B cycle) built and pushed ($BR)"
+  fi
 
   # ---- review ----
   R="b$accepts-$fixes-review"

@@ -24,3 +24,11 @@ Each entry: version, date, what changed, why, and the expected effect (which LOG
   - CLAUDE.md: log integrity, measurements only from runner logs, printed page numbers.
   - REVIEWER.md: Fix and Rethink are committed on `iter/NN`, which codifies what has been done since iteration 02; no pushing.
   - Expected: log deletions 0, citation errors 0, unlogged measurements 0.
+
+## v3.1 — 2026-10-18 (claude1)
+- `scripts/loop.sh`:
+  - reads the `result` message when CLI 2.1.295 returns `--output-format json` as a message list;
+  - adds `RESUME_REVIEW=iter/NN`;
+  - logs turns and permission denials.
+- Why: the first real run built iteration 04 correctly (structured output present, no permission denials) but stopped on a parsing bug, reporting "no structured output".
+- Expected: none on the LOG. This is a tooling fix, and that stop counts against the loop in the CP-02 time tally.
