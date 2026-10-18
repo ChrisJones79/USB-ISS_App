@@ -602,3 +602,38 @@ def i2c_direct(transport: Transport, *parts: int | bytes) -> bytes:
     if n != expected:
         raise IssProtocolError(f"I2C_DIRECT: device reports {n} bytes, frame reads {expected}")
     return bytes(data)
+
+
+# ---- SPI, datasheet pp.17-18; D-007 ----
+# p.17: "SPI command (0x61)". The same value as the I2C_H_100KHZ+SERIAL mode byte (p.9), but that byte only
+# appears inside a 5A 02 frame, so the two never meet at the head of the buffer.
+SPI_IO = 0x61
+SPI_FRAME_MAX = 63  # p.17: "The maximum frame length including the command is 63 bytes"
+SPI_DATA_MAX = SPI_FRAME_MAX - 1  # p.17: the command byte takes one of the 63
+
+
+# SPI, p.17: 61 followed by TxData1..TxData n. The format always has TxData1, so empty data is refused (compare D-006).
+def build_spi_io(data: bytes) -> bytes:
+    if not 1 <= len(data) <= SPI_DATA_MAX:
+        raise ValueError(f"SPI: {len(data)} data bytes outside 1-{SPI_DATA_MAX}")
+    return bytes([SPI_IO]) + bytes(data)
+
+
+def parse_spi_response(resp: bytes, n: int) -> bytes:
+    """SPI reply, p.17: FF then n received bytes; 00 is NACK. n is the number of data bytes sent."""
+    if len(resp) < 1:
+        raise IssTimeout(f"SPI: expected {1 + n} bytes, got 0")
+    if resp[0] == 0x00:
+        raise IssNack(None, "SPI")  # p.17 does not say how many bytes follow a NACK; they are ignored
+    if resp[0] != 0xFF:
+        raise IssProtocolError(f"SPI: first byte 0x{resp[0]:02X} is neither ACK nor NACK")
+    if len(resp) - 1 < n:
+        raise IssTimeout(f"SPI: expected {n} data bytes, got {len(resp) - 1}")
+    return bytes(resp[1:1 + n])
+
+
+def spi_io(transport: Transport, data: bytes) -> bytes:
+    frame = build_spi_io(data)
+    transport.write(frame)  # p.17: all bytes in one sequence; one write() is one frame (D-007)
+    # p.17: the device always returns the same number of bytes as you send, plus the status byte.
+    return parse_spi_response(transport.read(len(frame)), len(data))
