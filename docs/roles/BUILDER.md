@@ -15,4 +15,9 @@ Recommended model and effort: Sonnet 5.5, medium. If `NEXT.md` asks for somethin
 - Do not edit SPEC, DECISIONS, NEXT, the role files, the templates, LOG or CHANGES. Put any proposed changes in your report.
 - Never weaken, skip or delete a test to get a green run. If you think a test is wrong, say so in the report.
 - Report every deviation from `NEXT.md`. A deviation you report is fine; one you hide is a defect.
-- In protocol code, each command should cite the datasheet section it implements, in a comment.
+- In protocol code, each command should cite the datasheet section it implements, in a comment. Use printed page numbers (the `N/23` footer).
+- Run Python only as `.venv/bin/python` (the runner or `-m pytest`).
+- Don't install, upgrade or configure anything outside the repo: no pip, pyenv or system packages. If you need to, stop and report it as a blocker.
+- Never delete, move or overwrite a log. Superseded or failed runs stay, and `build.md` explains each one.
+- In a headless run (`scripts/loop.sh`), commands outside the allow list are denied. Treat a denial as a blocker. Don't work around it.
+- If you stop with questions or a blocker, report `status: blocked` when the loop asks for a structured result.

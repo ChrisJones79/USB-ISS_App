@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Read", "Glob", "Grep",
+      "Bash(git status)", "Bash(git status *)",
+      "Bash(git diff)", "Bash(git diff *)",
+      "Bash(git log *)", "Bash(git show *)",
+      "Bash(git branch)", "Bash(git branch *)",
+      "Bash(git checkout *)", "Bash(git switch *)",
+      "Bash(git add *)", "Bash(git commit *)",
+      "Bash(git merge *)", "Bash(git tag)", "Bash(git tag *)",
+      "Bash(git rev-parse *)", "Bash(git ls-files *)",
+      "Bash(.venv/bin/python scripts/run_tests.py *)",
+      "Bash(.venv/bin/python -m pytest *)"
+    ],
+    "deny": [
+      "Bash(git push)", "Bash(git push *)",
+      "Bash(git reset *)", "Bash(git clean *)", "Bash(git rebase *)",
+      "Bash(git config *)", "Bash(git remote *)",
+      "Bash(pip *)", "Bash(pip3 *)", "Bash(.venv/bin/pip *)", "Bash(python -m pip *)", "Bash(.venv/bin/python -m pip *)",
+      "Bash(pyenv *)", "Bash(sudo *)", "Bash(su *)",
+      "Bash(curl *)", "Bash(wget *)", "Bash(ssh *)",
+      "Bash(rm -rf *)",
+      "WebFetch", "WebSearch"
+    ]
+  }
+}

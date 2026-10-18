@@ -20,7 +20,33 @@ You are independent of the builder. Treat the claims in `build.md` as things to 
    - **Accept**: merge `iter/NN` into `main`, tag `iter-NN`, and write `NEXT.md` for iteration NN+1 (the next item on the SPEC roadmap).
    - **Fix**: write `NEXT.md` as a fix task for the same NN. Do not merge.
    - **Rethink**: do not write `NEXT.md`. Explain why in `review.md` and flag the iteration for a claude1 checkpoint.
-7. Commit on `main`, then stop and give Chris the verdict in one line. Add "checkpoint due" to that line if one is due.
+7. Commit, then stop and give Chris the verdict in one line. Add "checkpoint due" to that line if one is due.
+   - On **Accept**: commit on `main` (after the merge and tag).
+   - On **Fix** or **Rethink**: commit `review.md`, the LOG row and any fix `NEXT.md` on `iter/NN`, so the builder sees them.
+   - Never push. In the loop, `scripts/loop.sh` pushes. Outside the loop, Chris pushes.
+
+## Loop status (headless runs)
+When `scripts/loop.sh` runs you, it asks for a structured result. Fill it in honestly. The loop uses it to decide whether to continue without Chris.
+- `checkpoint_due`: true under the rules in **Checkpoints** below.
+- `needs_chris`: true if anything needs a human or claude1 before the next build. That covers:
+  - a product or scope question;
+  - a new DECISIONS entry (pending claude1);
+  - a SPEC/DECISIONS/datasheet conflict;
+  - a bench change;
+  - a denied command you needed;
+  - anything you would otherwise tell Chris beyond the verdict.
+
+  List the reasons.
+- `next_hw`: the class of the hardware section of the NEXT.md you just wrote.
+  - `none`: no hardware run.
+  - `safe-read`: only ISS_VERSION, GET_SER_NUM, ISS_MODE with IO_TYPE `0xAA`, GETPINS, GETAD, I2C_TEST, and I2C reads or address-only I2C_DIRECT frames on the bus `docs/HARDWARE.md` says is empty.
+  - `beyond-safe-read`: anything else, for example:
+    - driving an output;
+    - entering serial or SPI mode;
+    - any byte sent to the attached module;
+    - an I2C write with data;
+    - anything needing a bench change.
+- When in doubt, choose the stricter value.
 
 ## Writing NEXT.md
 - Start from `docs/templates/next.md`.

@@ -45,7 +45,7 @@ I2C data-byte limits and example count bytes (clarifies SPEC §6 item 03, "with 
 Rationale: never send more than the documented buffer holds. Where the datasheet is silent, use the closest documented limit. In both faulty examples, the text and the frame length agree with each other; only the count byte disagrees.
 Proposed by revclaude while writing NEXT 03. Ratified by claude1 on 2026-10-17 after checking against the datasheet. The page references above are one page low. The printed page numbers are: I2C_SGL p.11, I2C_AD0 p.12 (count example), I2C_AD1 p.13 (60/60), I2C_AD2 p.14 (59 write / 64 read, count example).
 
-## D-007 · 2026-10-17 · pending claude1
+## D-007 · 2026-10-17 · adopted
 I2C_DIRECT limits, and how commands without a length byte are framed (clarifies SPEC §6 item 04, "with frame limits enforced"; datasheet pp.15–17).
 - **Frame length.** p.15 says "You must limit the frame to < 60 bytes" but does not say whether the `0x57` command byte counts. Count it: the whole frame, `0x57` included, is at most 59 bytes. This is the stricter of the two readings.
 - **Sub-commands** (p.15). READ `0x20`–`0x2F` reads 1–16 bytes. WRITE `0x30`–`0x3F` writes 1–16 bytes, and exactly that many data bytes follow it. A frame must contain at least one sub-command.
@@ -55,4 +55,4 @@ I2C_DIRECT limits, and how commands without a length byte are framed (clarifies 
   - The mock treats the bytes from the command byte to the end of that `write()` call as one frame. It never waits for a later `write()`.
   - The mock has framed SERIAL_IO (p.19, no length byte) this way since iteration 02. This entry extends that rule and writes it down.
 Rationale: as in D-006, never exceed a documented buffer, and where the datasheet is silent, use the closest documented limit. The mock has no clock, so it cannot model a gap; "one `write()` is one frame" is the only rule it can apply, and it matches how the helpers send. A frame of up to 59 bytes is expected to reach the device without a gap. NEXT 04 hardware step 4 probes the 59/60-byte boundary without writing data to any device.
-Proposed by revclaude while writing NEXT 04.
+Proposed by revclaude while writing NEXT 04. Ratified by claude1 on 2026-10-18 after checking pp.15–17 (page references correct). Reading the 0x57 byte as part of the frame is the stricter reading, and NEXT 04 step 4 settles it on hardware. If the device accepts 60 bytes, the builder limit stays at 59.

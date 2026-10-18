@@ -136,18 +136,19 @@ Each item is roughly one iteration. revclaude may split an item, but must not me
 - **02. SERIAL_IO and I/O commands**
   - SERIAL_IO, SETPINS, GETPINS and GETAD, with buffer limits enforced (30-byte TX, 62-byte RX).
 - **03. I2C commands**: I2C_SGL, I2C_AD0/1/2 and I2C_TEST, with frame limits enforced (D-006). Split by revclaude, iteration 02.
-- **04. I2C_DIRECT and SPI**, with frame limits enforced.
-- **05. Minimal GUI**
+- **04. I2C_DIRECT**, with frame limits enforced (D-007). Split by revclaude, iteration 03.
+- **05. SPI**, with frame limits enforced. **Mock-only on the current bench:** SPI mode makes I/O1 the CE output, and the GY module's TX drives I/O1 (HARDWARE.md). A hardware SPI test (for example an SDO→SDI loopback with the GY's TX disconnected) needs a bench change approved by Chris.
+- **06. Minimal GUI**
   - Features F1, F2 and F4.
-- **06. Card framework**
+- **07. Card framework**
   - Manifest schema and validation, the loader, the card host, and mode activation (F5).
-- **07. GY-MCU90640 card, serial driver**
+- **08. GY-MCU90640 card, serial driver**
   - Frame parser, checksum, commands and device mock.
-  - Hardware test: read one frame in query mode.
-- **08. GY-MCU90640 panel**
+  - Hardware test: read one frame in query mode. Needs Chris: this is the first time serial mode drives I/O2 into the module.
+- **09. GY-MCU90640 panel**
   - Heatmap and device settings.
-- **09. I/O panel (F3)**
-- **10. Card editor (F6)**
+- **10. I/O panel (F3)**
+- **11. Card editor (F6)**
 - **Later:** GY-MCU90640 `i2c_direct`; more cards.
 
 ## 7. Out of scope (v1)

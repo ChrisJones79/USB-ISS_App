@@ -29,7 +29,9 @@ If any two of these conflict, stop and report the conflict. Never resolve it sil
 - One iteration implements one `NEXT.md` task. Iterations are numbered NN (00, 01, …). Fix cycles reuse the same NN.
 - The builder works on branch `iter/NN`. The reviewer merges to `main` and tags `iter-NN` only on Accept.
 - All artifacts for an iteration go in `docs/iterations/NN/`.
-- Raw test output goes to `docs/iterations/NN/logs/` and is written by the test runner itself. Never hand-edit a log, and never offer a summary in place of one.
+- Raw test output goes to `docs/iterations/NN/logs/` and is written by the test runner itself. Never hand-edit, delete or overwrite a log, and never offer a summary in place of one. Any hardware measurement you report must come from a runner log.
+- Datasheet citations use the printed page number (the footer `N/23`).
+- `scripts/loop.sh` may run builds and reviews headless, with the permissions in `.claude/loop-settings.json`. Nobody is watching during those runs, so the stop rules in the role files matter.
 - Process files (`CLAUDE.md`, `docs/roles/*`, `.claude/commands/*`, `docs/templates/*`) change only together with an entry in `docs/process/CHANGES.md`.
 
 ## Conventions
