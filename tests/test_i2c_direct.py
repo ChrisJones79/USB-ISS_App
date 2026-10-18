@@ -201,16 +201,20 @@ def test_mock_underflow():
     assert m.read(4) == B("00 03")
 
 
-def test_mock_unknown_subcommand():
+def test_mock_unknown_subcommand_is_ignored():
+    # Hardware (build-hw-20261018-021131): 57 05 answers FF 00, not 00 04.
     m = bus()
     m.write(B("57 05"))
-    assert m.read(4) == B("00 04")
+    assert m.read(4) == B("FF 00")
 
 
 def test_mock_frame_length_boundary():
     m = bus()
-    m.write(B("57") + bytes([STOP]) * 59)
+    # Hardware (build-hw-20261018-021131): 60 bytes still answers FF 00, so the mock overflows at 61.
+    m.write(B("57") + bytes([STOP]) * 60)
     assert m.read(4) == B("00 02")
+    m.write(B("57") + bytes([STOP]) * 59)
+    assert m.read(4) == B("FF 00")
     m.write(B("57") + bytes([STOP]) * 58)
     assert m.read(4) == B("FF 00")
 
@@ -249,10 +253,22 @@ def test_mock_i2c_serial_mode():
     assert d.mem[3] == 0x99
 
 
-def test_mock_io_mode_consumes_frame():
+def test_mock_io_mode_answers_00():
+    # Hardware (build-hw-20261018-021131): in IO_MODE, 57 01 30 A0 03 answers a single 00.
     m = bus({0x40: MockI2cDevice()})
     iss.set_mode(m, iss.build_io_mode(0xAA))
+    m.write(B("57 01 30 40 03"))
+    assert m.read(4) == B("00")
+    with pytest.raises(iss.IssTimeout):
+        iss.i2c_direct(m, 1, iss.direct_write(b"\x40"), 3)  # 00 alone is one status byte
+    assert m.unhandled == []
+    assert iss.version(m).mode == 0x00
+
+
+def test_mock_io_serial_mode_consumes_frame():
+    m = bus({0x40: MockI2cDevice()})
+    iss.set_mode(m, iss.build_io_serial(9600, 0xAA))
     with pytest.raises(iss.IssTimeout):
         iss.i2c_direct(m, 1, iss.direct_write(b"\x40"), 3)
     assert m.unhandled == [B("57 01 30 40 03")]
-    assert iss.version(m).mode == 0x00
+    assert iss.version(m).mode == 0x01

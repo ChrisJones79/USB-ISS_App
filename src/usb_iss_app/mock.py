@@ -9,6 +9,12 @@ from .transport import DEFAULT_TIMEOUT, Transport
 log = logging.getLogger(__name__)
 
 
+# Hardware: a 60-byte I2C_DIRECT frame (0x57 plus 59 STOPs) answered FF 00, so the device accepts at least
+# 60 bytes (docs/iterations/04/logs/build-hw-20261018-021131.txt). The builder limit stays at 59 (D-007).
+# ASSUMPTION: longer frames overflow, as p.15 says; 61 bytes has not been tried.
+MOCK_DIRECT_OVERFLOW = 60
+
+
 class MockI2cDevice:
     """A test-defined I2C slave: memory plus a pointer that post-increments and wraps at size.
 
@@ -292,12 +298,16 @@ class MockTransport(Transport):
         frame = bytes(self._tx)
         self._tx.clear()
         if not self._is_i2c_mode():
-            # ASSUMPTION: outside the I2C modes the frame is consumed and dropped with no reply
-            # (hardware step 5 of NEXT 04 records IO_MODE).
+            if self.mode == iss.IO_MODE:
+                # Hardware: in IO_MODE the device answers 57 01 30 A0 03 with a single 00
+                # (docs/iterations/04/logs/build-hw-20261018-021131.txt).
+                self._rx.append(0x00)
+                return
+            # ASSUMPTION: in IO_MODE+SERIAL and SPI the frame is consumed and dropped with no reply.
             self.unhandled.append(frame)
             log.warning("MockTransport: I2C_DIRECT outside I2C mode dropped")
             return
-        if len(frame) > iss.I2C_DIRECT_FRAME_MAX:
+        if len(frame) > MOCK_DIRECT_OVERFLOW:
             self._rx += bytes([0x00, 0x02])  # Buffer Overflow, p.15; nothing is executed
             return
         out = bytearray()
@@ -340,9 +350,8 @@ class MockTransport(Transport):
                         dev.begin_direct_write()
                 if wr_dev:
                     wr_dev.direct_write(data)
-            else:
-                self._rx += bytes([0x00, 0x04])  # Unknown command, p.15
-                return
+            # Any other byte: hardware ignores 0x05 and answers FF 00 (build-hw-20261018-021131.txt),
+            # not 00 04 as p.15 suggests. ASSUMPTION: the same for every other unknown sub-command.
         self._rx += bytes([0xFF, len(out)]) + out
 
     def write(self, data: bytes) -> None:

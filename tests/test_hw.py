@@ -115,10 +115,10 @@ def test_hw_i2c_direct_empty_bus(io_hw):
     hw, mode_byte, raw = io_hw
     iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
     assert mode_byte("I2C_S_100KHZ 5A 02 40 AA") == 0x40
-    # Step 2: START, WRITE 1 (address A0), STOP. Expected 00 01.
+    # Step 2: START, WRITE 1 (address A0), STOP.
     raw("I2C_DIRECT address-only", bytes.fromhex("57 01 30 A0 03"), 4)
     assert mode_byte("I2C_DIRECT address-only") == 0x40
-    # Step 3: unknown sub-command. Expected 00 04.
+    # Step 3: unknown sub-command.
     raw("I2C_DIRECT unknown sub-command", bytes.fromhex("57 05"), 4)
     assert mode_byte("I2C_DIRECT unknown sub-command") == 0x40
     # Step 4: frame-length boundary, STOP conditions only. 59 bytes expected FF 00; 60 bytes expected 00 02 (D-007).
