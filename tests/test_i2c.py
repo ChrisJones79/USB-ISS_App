@@ -1,4 +1,4 @@
-"""Iteration 03: I2C_SGL, I2C_AD0, I2C_AD1, I2C_AD2, I2C_TEST (datasheet pp.10-15; D-006)."""
+"""Iteration 03: I2C_SGL, I2C_AD0, I2C_AD1, I2C_AD2, I2C_TEST (datasheet pp.11-16; D-006)."""
 import pytest
 
 from usb_iss_app import iss
@@ -14,31 +14,31 @@ def test_constants():
 
 # ---- datasheet example frames ----
 def test_sgl_examples():
-    assert iss.build_i2c_sgl_write(0x40, 0x00) == B("53 40 00")  # p.10
-    assert iss.build_i2c_sgl_read(0x40) == B("53 41")  # p.11
+    assert iss.build_i2c_sgl_write(0x40, 0x00) == B("53 40 00")  # p.11
+    assert iss.build_i2c_sgl_read(0x40) == B("53 41")  # p.12
 
 
 def test_ad0_examples():
-    assert iss.build_i2c_ad0_read(0xF0, 2) == B("54 F1 02")  # p.11
-    # p.11 shows count 02 with four data bytes; D-006: the text wins, the count is 04.
+    assert iss.build_i2c_ad0_read(0xF0, 2) == B("54 F1 02")  # p.12
+    # p.12 shows count 02 with four data bytes; D-006: the text wins, the count is 04.
     assert iss.build_i2c_ad0_write(0x30, B("12 34 56 78")) == B("54 30 04 12 34 56 78")
 
 
 def test_ad1_examples():
-    assert iss.build_i2c_ad1_write(0xE0, 0x00, B("AB")) == B("55 E0 00 01 AB")  # p.12, nn = AB
-    assert iss.build_i2c_ad1_read(0xC0, 0x02, 2) == B("55 C1 02 02")  # p.12
+    assert iss.build_i2c_ad1_write(0xE0, 0x00, B("AB")) == B("55 E0 00 01 AB")  # p.13, nn = AB
+    assert iss.build_i2c_ad1_read(0xC0, 0x02, 2) == B("55 C1 02 02")  # p.13
 
 
 def test_ad2_examples():
     data = bytes(range(32))
-    # p.13 shows count 34 for 32 data bytes in a "37 byte sequence"; D-006: the count is 0x20.
+    # p.14 shows count 34 for 32 data bytes in a "37 byte sequence"; D-006: the count is 0x20.
     frame = iss.build_i2c_ad2_write(0xA0, 0x0000, data)
     assert frame == B("56 A0 00 00 20") + data and len(frame) == 37
-    assert iss.build_i2c_ad2_read(0xA0, 0x0000, 3) == B("56 A1 00 00 03")  # p.13
+    assert iss.build_i2c_ad2_read(0xA0, 0x0000, 3) == B("56 A1 00 00 03")  # p.14
 
 
 def test_test_example():
-    assert iss.build_i2c_test(0xA0) == B("58 A0")  # p.15
+    assert iss.build_i2c_test(0xA0) == B("58 A0")  # p.16
 
 
 def test_ad2_register_high_byte_first():
@@ -218,10 +218,18 @@ def test_mock_i2c_serial_mode():
 def test_mock_io_mode_consumes_frame():
     m = bus({0xA0: MockI2cDevice()})
     iss.set_mode(m, iss.build_io_mode(0xAA))
-    with pytest.raises(iss.IssTimeout):
-        iss.i2c_test(m, 0xA0)
-    assert m.unhandled == [B("58 A0")]
+    # Hardware: IO_MODE answers I2C_TEST with 00 (iteration 03 logs build-hw-20261017-233218, review-hw-20261018-001847).
+    assert iss.i2c_test(m, 0xA0) is False
+    assert m.unhandled == []
     m.write(iss.build_i2c_ad1_write(0xA0, 0, B("5A 01")))
     assert m.read(1) == b""
     assert m.unhandled[-1] == B("55 A0 00 02 5A 01")
     assert iss.version(m).mode == 0x00
+
+
+def test_mock_io_serial_mode_i2c_test_unanswered():
+    m = bus({0xA0: MockI2cDevice()})
+    iss.set_mode(m, iss.build_io_serial(9600, 0xAA))
+    with pytest.raises(iss.IssTimeout):
+        iss.i2c_test(m, 0xA0)
+    assert m.unhandled == [B("58 A0")]

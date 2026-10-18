@@ -25,21 +25,21 @@ def test_hw_mode_sequence(hw):
         return m
 
     try:
-        iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0x0A))
-        assert mode_byte("I2C_S_100KHZ 5A 02 40 0A") == 0x40
+        iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
+        assert mode_byte("I2C_S_100KHZ 5A 02 40 AA") == 0x40
 
-        frame = iss.build_io_change(0x0F)
+        frame = iss.build_io_change(0xAF)
         hw.write(frame)
         raw = hw.read(2)
         print(f"HW IO_CHANGE {frame.hex(' ')} raw response: {raw.hex(' ') or '(none)'}")
-        mode_byte("IO_CHANGE 5A 02 10 0F")  # logged, not asserted
+        mode_byte("IO_CHANGE 5A 02 10 AF")  # logged, not asserted
         assert raw == bytes([0xFF, 0x00])
 
         iss.set_mode(hw, iss.build_io_mode(0xAA))
         assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
     finally:
-        iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0x0A))
-        assert mode_byte("restore 5A 02 40 0A") == 0x40
+        iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
+        assert mode_byte("restore 5A 02 40 AA") == 0x40
 
 
 @pytest.fixture
@@ -107,3 +107,26 @@ def test_hw_i2c_empty_bus(io_hw):
     assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
     raw("I2C_TEST A0 in IO_MODE", iss.build_i2c_test(0xA0), 2)
     assert mode_byte("after I2C_TEST in IO_MODE") == 0x00
+
+
+def test_hw_i2c_direct_empty_bus(io_hw):
+    """NEXT 04 hardware steps 1-5. Address-only frames on the empty bus; no data byte is written to any address.
+    Raw responses are logged, not asserted. Each frame is sent in one write()."""
+    hw, mode_byte, raw = io_hw
+    iss.set_mode(hw, iss.build_i2c_mode(iss.I2C_S_100KHZ, 0xAA))
+    assert mode_byte("I2C_S_100KHZ 5A 02 40 AA") == 0x40
+    # Step 2: START, WRITE 1 (address A0), STOP. Expected 00 01.
+    raw("I2C_DIRECT address-only", bytes.fromhex("57 01 30 A0 03"), 4)
+    assert mode_byte("I2C_DIRECT address-only") == 0x40
+    # Step 3: unknown sub-command. Expected 00 04.
+    raw("I2C_DIRECT unknown sub-command", bytes.fromhex("57 05"), 4)
+    assert mode_byte("I2C_DIRECT unknown sub-command") == 0x40
+    # Step 4: frame-length boundary, STOP conditions only. 59 bytes expected FF 00; 60 bytes expected 00 02 (D-007).
+    raw("I2C_DIRECT 59-byte frame", bytes([iss.I2C_DIRECT]) + bytes([iss.I2C_DIRECT_STOP]) * 58, 4)
+    raw("I2C_DIRECT 60-byte frame", bytes([iss.I2C_DIRECT]) + bytes([iss.I2C_DIRECT_STOP]) * 59, 4)
+    assert mode_byte("I2C_DIRECT frame-length boundary") == 0x40
+    # Step 5: IO_MODE.
+    iss.set_mode(hw, iss.build_io_mode(0xAA))
+    assert mode_byte("IO_MODE 5A 02 00 AA") == 0x00
+    raw("I2C_DIRECT address-only in IO_MODE", bytes.fromhex("57 01 30 A0 03"), 4)
+    assert mode_byte("after I2C_DIRECT in IO_MODE") == 0x00

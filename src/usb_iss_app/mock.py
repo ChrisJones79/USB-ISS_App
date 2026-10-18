@@ -10,12 +10,34 @@ log = logging.getLogger(__name__)
 
 
 class MockI2cDevice:
-    """A test-defined I2C slave: memory plus a pointer that post-increments and wraps at size."""
+    """A test-defined I2C slave: memory plus a pointer that post-increments and wraps at size.
 
-    def __init__(self, size: int = 256):
+    addr_bytes (0, 1 or 2) is the number of internal address bytes that I2C_DIRECT writes send
+    before data (pp.15-16). Only I2C_DIRECT uses it; the register commands set the pointer themselves.
+    """
+
+    def __init__(self, size: int = 256, addr_bytes: int = 1):
+        if addr_bytes not in (0, 1, 2):
+            raise ValueError(f"addr_bytes {addr_bytes} is not 0, 1 or 2")
         self.size = size
+        self.addr_bytes = addr_bytes
         self.mem = bytearray(size)
         self.pointer = 0
+        self._addr_buf = bytearray()
+
+    def begin_direct_write(self) -> None:
+        """A write transaction starts (I2C_DIRECT): the next addr_bytes bytes set the pointer."""
+        self._addr_buf.clear()
+
+    def direct_write(self, data: bytes) -> None:
+        """I2C_DIRECT write bytes: pointer bytes first, high byte first, then data at the pointer."""
+        for b in data:
+            if len(self._addr_buf) < self.addr_bytes:
+                self._addr_buf.append(b)
+                if len(self._addr_buf) == self.addr_bytes:
+                    self.pointer = int.from_bytes(self._addr_buf, "big") % self.size
+            else:
+                self.write(bytes([b]))
 
     def write(self, data: bytes) -> None:
         for b in data:
@@ -53,6 +75,9 @@ class MockTransport(Transport):
         self._tx_pending = bytearray()
         self._serial_rx = bytearray()
         self.i2c_devices: dict[int, MockI2cDevice] = {}  # keyed by even 8-bit address; empty like the bench bus
+
+    def _is_i2c_mode(self) -> bool:
+        return self.mode in iss.I2C_MODES or bool(self.mode & iss.SERIAL and self.mode & ~iss.SERIAL in iss.I2C_MODES)
 
     def force_next_setpins_nack(self) -> None:
         """Test-only: the next SETPINS is consumed and answered 00."""
@@ -198,7 +223,7 @@ class MockTransport(Transport):
 
     @staticmethod
     def _i2c_frame_len(tx: bytearray) -> int | None:
-        """Total length of the I2C frame at the head of tx, pp.10-15; None if not yet known."""
+        """Total length of the I2C frame at the head of tx, pp.11-16; None if not yet known."""
         cmd = tx[0]
         if cmd == iss.I2C_TEST:
             return 2
@@ -215,15 +240,20 @@ class MockTransport(Transport):
         return 5 if read else (5 + tx[4] if len(tx) >= 5 else None)
 
     def _i2c_command(self) -> bool:
-        """I2C_SGL/AD0/AD1/AD2/TEST, pp.10-15. False if the frame is still incomplete."""
+        """I2C_SGL/AD0/AD1/AD2/TEST, pp.11-16. False if the frame is still incomplete."""
         n = self._i2c_frame_len(self._tx)
         if n is None or len(self._tx) < n:
             return False  # wait for the whole frame; its bytes are never commands
         frame = bytes(self._tx[:n])
         del self._tx[:n]
-        if not (self.mode in iss.I2C_MODES or self.mode & ~iss.SERIAL in iss.I2C_MODES and self.mode & iss.SERIAL):
-            # ASSUMPTION: outside the I2C modes the frame is consumed and dropped with no reply
-            # (hardware step 4 of NEXT 03 records the real behaviour for I2C_TEST).
+        if not self._is_i2c_mode():
+            if frame[0] == iss.I2C_TEST and self.mode == iss.IO_MODE:
+                # Hardware: in IO_MODE the device answers I2C_TEST with 00 (docs/iterations/03/logs/
+                # build-hw-20261017-233218.txt, review-hw-20261018-001847.txt).
+                self._rx.append(0x00)
+                return True
+            # ASSUMPTION: outside the I2C modes the other frames (and I2C_TEST in IO_MODE+SERIAL and
+            # SPI) are consumed and dropped with no reply.
             self.unhandled.append(frame)
             log.warning("MockTransport: I2C command outside I2C mode dropped")
             return True
@@ -231,7 +261,7 @@ class MockTransport(Transport):
         read = bool(frame[1] & 1)
         dev = self.i2c_devices.get(frame[1] & 0xFE)
         if cmd == iss.I2C_TEST:
-            # ASSUMPTION: FF for "non-zero" (p.15).
+            # ASSUMPTION: FF for "non-zero" (p.16).
             self._rx.append(0xFF if dev else 0x00)
             return True
         if cmd == iss.I2C_SGL:
@@ -256,6 +286,65 @@ class MockTransport(Transport):
             self._rx.append(0x00)
         return True
 
+    def _direct_command(self) -> None:
+        """I2C_DIRECT, pp.15-16; D-007. The whole of _tx is the frame."""
+        # ASSUMPTION (D-007): no length byte, so the frame runs from 57 to the end of the write() call.
+        frame = bytes(self._tx)
+        self._tx.clear()
+        if not self._is_i2c_mode():
+            # ASSUMPTION: outside the I2C modes the frame is consumed and dropped with no reply
+            # (hardware step 5 of NEXT 04 records IO_MODE).
+            self.unhandled.append(frame)
+            log.warning("MockTransport: I2C_DIRECT outside I2C mode dropped")
+            return
+        if len(frame) > iss.I2C_DIRECT_FRAME_MAX:
+            self._rx += bytes([0x00, 0x02])  # Buffer Overflow, p.15; nothing is executed
+            return
+        out = bytearray()
+        want_addr = False
+        wr_dev: MockI2cDevice | None = None  # device addressed for writing
+        rd_dev: MockI2cDevice | None = None  # device addressed for reading
+        i = 1
+        while i < len(frame):
+            sub = frame[i]
+            i += 1
+            if sub in (iss.I2C_DIRECT_START, iss.I2C_DIRECT_RESTART):
+                want_addr, wr_dev, rd_dev = True, None, None
+            elif sub == iss.I2C_DIRECT_STOP:
+                want_addr, wr_dev, rd_dev = False, None, None
+            elif sub == iss.I2C_DIRECT_NACK:
+                pass  # no effect in the mock
+            elif 0x20 <= sub <= 0x2F:
+                k = sub - iss.I2C_DIRECT_READ_BASE + 1
+                # ASSUMPTION: with no device addressed for reading, the pull-ups (p.3) give FF.
+                out += rd_dev.read(k) if rd_dev else b"\xff" * k
+            elif 0x30 <= sub <= 0x3F:
+                k = sub - iss.I2C_DIRECT_WRITE_BASE + 1
+                if len(frame) - i < k:
+                    self._rx += bytes([0x00, 0x03])  # Buffer Underflow, p.15
+                    return
+                data = frame[i:i + k]
+                i += k
+                if want_addr:
+                    want_addr = False
+                    addr, data = data[0], data[1:]
+                    dev = self.i2c_devices.get(addr & 0xFE)
+                    if dev is None:
+                        # ASSUMPTION: the device stops at the first unacknowledged address.
+                        self._rx += bytes([0x00, 0x01])  # Device Error, p.15
+                        return
+                    if addr & 1:  # the low bit selects read
+                        rd_dev = dev
+                    else:
+                        wr_dev = dev
+                        dev.begin_direct_write()
+                if wr_dev:
+                    wr_dev.direct_write(data)
+            else:
+                self._rx += bytes([0x00, 0x04])  # Unknown command, p.15
+                return
+        self._rx += bytes([0xFF, len(out)]) + out
+
     def write(self, data: bytes) -> None:
         self._tx += data
         self._process()
@@ -265,6 +354,9 @@ class MockTransport(Transport):
             head = self._tx[0]
             if head == iss.SERIAL_IO:
                 self._serial_command()
+                return
+            if head == iss.I2C_DIRECT:
+                self._direct_command()
                 return
             if head == iss.GETPINS:
                 self._rx.append(self._getpins())

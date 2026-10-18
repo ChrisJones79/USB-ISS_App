@@ -24,7 +24,10 @@ class IssProtocolError(IssError):
 
 
 class IssNack(IssError):
-    """A command answered NACK: ISS_MODE (00 rr, datasheet p.6), or SETPINS (00, p.20) or an I2C write (00, pp.10-13); reason is None for the last two."""
+    """A command answered NACK: ISS_MODE (00 rr, datasheet p.6), I2C_DIRECT (00 rr, p.15), or SETPINS (00, p.20) or an I2C write (00, pp.11-14); reason is None for the last two.
+
+    The reason's name comes from I2C_DIRECT_NACK_REASONS when command is "I2C_DIRECT", otherwise from NACK_REASONS.
+    """
 
     def __init__(self, reason: int | None = None, command: str = "ISS_MODE"):
         self.reason = reason
@@ -32,7 +35,8 @@ class IssNack(IssError):
             self.name = None
             super().__init__(f"{command} NACK")
             return
-        self.name = NACK_REASONS.get(reason, f"Unknown reason 0x{reason:02X}")
+        table = I2C_DIRECT_NACK_REASONS if command == "I2C_DIRECT" else NACK_REASONS
+        self.name = table.get(reason, f"Unknown reason 0x{reason:02X}")
         super().__init__(f"{command} NACK: 0x{reason:02X} {self.name}")
 
 
@@ -354,20 +358,20 @@ def get_ad(transport: Transport, channel: int) -> int:
     return parse_get_ad(transport.read(2))
 
 
-# ---- I2C_SGL, I2C_AD0, I2C_AD1, I2C_AD2, I2C_TEST, datasheet pp.10-15 (PDF page numbers, as in NEXT 03; D-006) ----
+# ---- I2C_SGL, I2C_AD0, I2C_AD1, I2C_AD2, I2C_TEST, datasheet pp.11-16; D-006 ----
 I2C_SGL = 0x53
 I2C_AD0 = 0x54
 I2C_AD1 = 0x55
 I2C_AD2 = 0x56
 I2C_TEST = 0x58
 I2C_AD0_MAX = 60  # D-006: the datasheet gives no limit; same as I2C_AD1
-I2C_AD1_MAX = 60  # p.12 (printed p.13), reads and writes
-I2C_AD2_WRITE_MAX = 59  # p.13 (printed p.14): "so as not to overflow the 64 byte internal buffer"
-I2C_AD2_READ_MAX = 64  # p.13 (printed p.14)
+I2C_AD1_MAX = 60  # p.13, reads and writes
+I2C_AD2_WRITE_MAX = 59  # p.14: "so as not to overflow the 64 byte internal buffer"
+I2C_AD2_READ_MAX = 64  # p.14
 
 
 def _i2c_addr(addr: int) -> int:
-    """Datasheet 8-bit form: the even write address (pp.10-13)."""
+    """Datasheet 8-bit form: the even write address (pp.11-14)."""
     if not 0 <= addr <= 0xFE or addr & 1:
         raise ValueError(f"I2C address 0x{addr:X} is not even and in 0x00-0xFE")
     return addr
@@ -385,7 +389,7 @@ def _i2c_reg(reg: int, top: int, name: str) -> int:
     return reg
 
 
-# I2C_SGL, p.10: 53 addr value (write); p.11: 53 addr+1 (read, add 1 to the device address).
+# I2C_SGL, p.11: 53 addr value (write); p.12: 53 addr+1 (read, add 1 to the device address).
 def build_i2c_sgl_write(addr: int, value: int) -> bytes:
     return bytes([I2C_SGL, _i2c_addr(addr), _byte(value, "I2C_SGL value")])
 
@@ -394,7 +398,7 @@ def build_i2c_sgl_read(addr: int) -> bytes:
     return bytes([I2C_SGL, _i2c_addr(addr) | 1])
 
 
-# I2C_AD0, p.11: 54 addr n data... (write); 54 addr+1 n (read).
+# I2C_AD0, p.12: 54 addr n data... (write); 54 addr+1 n (read).
 def build_i2c_ad0_write(addr: int, data: bytes) -> bytes:
     n = _i2c_count(len(data), I2C_AD0_MAX, "I2C_AD0")
     return bytes([I2C_AD0, _i2c_addr(addr), n]) + bytes(data)
@@ -404,7 +408,7 @@ def build_i2c_ad0_read(addr: int, n: int) -> bytes:
     return bytes([I2C_AD0, _i2c_addr(addr) | 1, _i2c_count(n, I2C_AD0_MAX, "I2C_AD0")])
 
 
-# I2C_AD1, p.12: 55 addr reg n data... (write); 55 addr+1 reg n (read).
+# I2C_AD1, p.13: 55 addr reg n data... (write); 55 addr+1 reg n (read).
 def build_i2c_ad1_write(addr: int, reg: int, data: bytes) -> bytes:
     n = _i2c_count(len(data), I2C_AD1_MAX, "I2C_AD1")
     return bytes([I2C_AD1, _i2c_addr(addr), _i2c_reg(reg, 0xFF, "I2C_AD1"), n]) + bytes(data)
@@ -415,7 +419,7 @@ def build_i2c_ad1_read(addr: int, reg: int, n: int) -> bytes:
                   _i2c_count(n, I2C_AD1_MAX, "I2C_AD1")])
 
 
-# I2C_AD2, p.13: 56 addr regH regL n data... (write); 56 addr+1 regH regL n (read). High byte first.
+# I2C_AD2, p.14: 56 addr regH regL n data... (write); 56 addr+1 regH regL n (read). High byte first.
 def build_i2c_ad2_write(addr: int, reg: int, data: bytes) -> bytes:
     n = _i2c_count(len(data), I2C_AD2_WRITE_MAX, "I2C_AD2 write")
     _i2c_reg(reg, 0xFFFF, "I2C_AD2")
@@ -428,13 +432,13 @@ def build_i2c_ad2_read(addr: int, reg: int, n: int) -> bytes:
                   _i2c_count(n, I2C_AD2_READ_MAX, "I2C_AD2 read")])
 
 
-# I2C_TEST, p.15: 58 addr; reply 00 if the device is absent, non-zero if it is present.
+# I2C_TEST, p.16: 58 addr; reply 00 if the device is absent, non-zero if it is present.
 def build_i2c_test(addr: int) -> bytes:
     return bytes([I2C_TEST, _i2c_addr(addr)])
 
 
 def parse_i2c_write(resp: bytes, command: str) -> None:
-    """Every I2C write, pp.10-13: 00 if the write failed, non-zero if it succeeded."""
+    """Every I2C write, pp.11-14: 00 if the write failed, non-zero if it succeeded."""
     if len(resp) < 1:
         raise IssTimeout(f"{command}: expected 1 byte, got 0")
     if resp[0] == 0x00:
@@ -500,3 +504,101 @@ def i2c_ad2_read(transport: Transport, addr: int, reg: int, n: int) -> bytes:
 def i2c_test(transport: Transport, addr: int) -> bool:
     transport.write(build_i2c_test(addr))
     return parse_i2c_test(transport.read(1))
+
+
+# ---- I2C_DIRECT, datasheet pp.15-16; D-007 ----
+I2C_DIRECT = 0x57  # p.15
+I2C_DIRECT_START = 0x01  # p.15
+I2C_DIRECT_RESTART = 0x02  # p.15
+I2C_DIRECT_STOP = 0x03  # p.15
+I2C_DIRECT_NACK = 0x04  # p.15: send NACK after the next read
+I2C_DIRECT_READ_BASE = 0x20  # p.15: READ 0x20-0x2F reads 1-16 bytes
+I2C_DIRECT_WRITE_BASE = 0x30  # p.15: WRITE 0x30-0x3F writes the next 1-16 bytes
+I2C_DIRECT_FRAME_MAX = 59  # D-007: the whole frame, 0x57 included (p.15: "< 60 bytes")
+I2C_DIRECT_CHUNK_MAX = 16  # p.15: bytes per READ or WRITE sub-command
+I2C_DIRECT_READ_TOTAL_MAX = 60  # D-007: the datasheet gives no limit; closest documented read limit (p.13)
+I2C_DIRECT_NACK_REASONS = {0x01: "Device Error", 0x02: "Buffer Overflow", 0x03: "Buffer Underflow", 0x04: "Unknown command"}  # p.15
+
+
+# READ, p.15: one sub-command byte, 0x20 + n - 1.
+def direct_read(n: int) -> bytes:
+    if not 1 <= n <= I2C_DIRECT_CHUNK_MAX:
+        raise ValueError(f"I2C_DIRECT READ: byte count {n} outside 1-{I2C_DIRECT_CHUNK_MAX}")
+    return bytes([I2C_DIRECT_READ_BASE + n - 1])
+
+
+# WRITE, p.15: sub-command byte 0x30 + n - 1, then the n bytes. The device address is written like any other byte.
+def direct_write(data: bytes) -> bytes:
+    if not 1 <= len(data) <= I2C_DIRECT_CHUNK_MAX:
+        raise ValueError(f"I2C_DIRECT WRITE: byte count {len(data)} outside 1-{I2C_DIRECT_CHUNK_MAX}")
+    return bytes([I2C_DIRECT_WRITE_BASE + len(data) - 1]) + bytes(data)
+
+
+def _direct_walk(frame: bytes) -> tuple[int, int]:
+    """Walk the sub-commands after the 0x57 byte. Returns (sub-command count, total READ bytes)."""
+    subs = reads = 0
+    i = 1
+    while i < len(frame):
+        sub = frame[i]
+        subs += 1
+        i += 1
+        if I2C_DIRECT_START <= sub <= I2C_DIRECT_NACK:
+            continue
+        if 0x20 <= sub <= 0x2F:
+            reads += sub - I2C_DIRECT_READ_BASE + 1
+        elif 0x30 <= sub <= 0x3F:
+            k = sub - I2C_DIRECT_WRITE_BASE + 1
+            if len(frame) - i < k:
+                raise ValueError(f"I2C_DIRECT: WRITE 0x{sub:02X} needs {k} data bytes, only {len(frame) - i} follow")
+            i += k
+        else:
+            raise ValueError(f"I2C_DIRECT: 0x{sub:02X} is not a sub-command")
+    return subs, reads
+
+
+# I2C_DIRECT, p.15: 57 followed by sub-commands. Checks the frame structure and D-007's limits, not I2C semantics.
+def build_i2c_direct(*parts: int | bytes) -> bytes:
+    frame = bytearray([I2C_DIRECT])
+    for part in parts:
+        if isinstance(part, int):
+            frame.append(_byte(part, "I2C_DIRECT sub-command"))
+        else:
+            frame += part
+    frame = bytes(frame)
+    subs, reads = _direct_walk(frame)
+    if subs == 0:
+        raise ValueError("I2C_DIRECT: no sub-commands")
+    if len(frame) > I2C_DIRECT_FRAME_MAX:
+        raise ValueError(f"I2C_DIRECT: frame of {len(frame)} bytes exceeds {I2C_DIRECT_FRAME_MAX}")
+    if reads > I2C_DIRECT_READ_TOTAL_MAX:
+        raise ValueError(f"I2C_DIRECT: {reads} bytes read exceeds {I2C_DIRECT_READ_TOTAL_MAX}")
+    return frame
+
+
+def i2c_direct_read_count(frame: bytes) -> int:
+    """Total bytes the READ sub-commands of a built frame will return."""
+    return _direct_walk(frame)[1]
+
+
+def parse_i2c_direct_status(resp: bytes) -> int:
+    """I2C_DIRECT status bytes, p.15: FF nn is ACK with nn bytes to read; 00 rr is NACK with reason rr."""
+    if len(resp) < 2:
+        raise IssTimeout(f"I2C_DIRECT: expected 2 status bytes, got {len(resp)}")
+    if resp[0] == 0xFF:
+        return resp[1]
+    if resp[0] == 0x00:
+        raise IssNack(resp[1], "I2C_DIRECT")
+    raise IssProtocolError(f"I2C_DIRECT: first byte 0x{resp[0]:02X} is neither ACK nor NACK")
+
+
+def i2c_direct(transport: Transport, *parts: int | bytes) -> bytes:
+    frame = build_i2c_direct(*parts)
+    transport.write(frame)  # one write(): the device ends a frame at an inter-byte gap (D-007)
+    n = parse_i2c_direct_status(transport.read(2))
+    data = transport.read(n) if n else b""
+    if len(data) < n:
+        raise IssTimeout(f"I2C_DIRECT: expected {n} data bytes, got {len(data)}")
+    expected = i2c_direct_read_count(frame)
+    if n != expected:
+        raise IssProtocolError(f"I2C_DIRECT: device reports {n} bytes, frame reads {expected}")
+    return bytes(data)
