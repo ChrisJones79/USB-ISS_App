@@ -1,0 +1,6 @@
+[03:12:13] loop start 20261018-031213; claude 2.1.295 (Claude Code); max accepts 4
+[03:12:33] resuming: review of existing build on iter/04 (pushed)
+[03:12:33] run b0-0-review: model=opus effort requested=high
+[03:29:56] b0-0-review cost (estimate, USD): 3.2570935999999997; turns 78; permission denials: 1
+[03:29:56] iteration 04 review: Accept
+[03:29:58] STOP: reviewer needs Chris: SPEC §8 lacks four errata that the mock now follows: I2C_DIRECT 57 05 -> FF 00 (no NACK 04); a 60-byte I2C_DIRECT frame -> FF 00 (D-007 reading not supported; the builder limit stays 59); I2C_DIRECT in IO_MODE -> 00; iteration 03's I2C_TEST in IO_MODE -> 00. claude1 must record them (SPEC §3).; REVIEWER.md's safe-read class is narrower than the existing --hw suite (IO_TYPE 0xFF, IO_CHANGE 0xAF, SETPINS 63 0F). Read strictly, any future NEXT asking for a --hw run is beyond-safe-read. claude1/Chris should widen the class or add test selection. NEXT 05 is hw none, so it is unaffected.; Denied command: a Write of a scratch mutation script to /tmp (outside the allowed dirs). I did the same check with in-repo Edit, pytest and git checkout restores, but the loop settings have no scratch area for reviewer tooling.; Records: an earlier interrupted review's logs (review-*-0307*) are on main via Chris's 1db656f, and that run's loop record is missing from docs/process/loop/.
