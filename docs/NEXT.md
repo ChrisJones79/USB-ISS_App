@@ -1,143 +1,179 @@
-# NEXT — Iteration 03 (fix cycle 0)
+# NEXT — Iteration 04 (fix cycle 0)
 
-Recommended model/effort: Sonnet 5.5, medium.
-Author: revclaude. Read `docs/iterations/02/review.md` (fix cycle 1) first; requirement 6 carries over from it.
+Recommended model/effort: Sonnet 5.5, high. The I2C_DIRECT sub-command interpreter in the mock is the most involved mock work so far.
+Author: revclaude. Read `docs/iterations/03/review.md` first. Requirements 6–8 carry over from it.
 
 ## Context
-Iteration 02 was accepted (`iter-02`). SERIAL_IO, SETPINS, GETPINS and GETAD are in place, and the mock follows the device for the two hardware findings (SPEC §8).
+Iteration 03 was accepted (`iter-03`). I2C_SGL, I2C_AD0/1/2 and I2C_TEST are in place, and the mock emulates an I2C bus of `MockI2cDevice`s.
 
-This iteration is **the first half of roadmap item 03** (SPEC §6: "I2C and SPI commands"). It covers the register-style I2C commands **I2C_SGL, I2C_AD0, I2C_AD1, I2C_AD2** and **I2C_TEST** (datasheet pp.10–15), with the byte limits enforced. I2C_DIRECT and SPI are iteration 04. From now on, roadmap items 04–09 run one iteration number later than their labels.
+This iteration is **the first half of roadmap item 04** (SPEC §6: "I2C_DIRECT and SPI"). It covers **I2C_DIRECT** only (datasheet pp.15–16). SPI is iteration 05. From now on, roadmap items 05–10 run two iteration numbers later than their labels.
 
-The byte limits follow **D-006** (pending claude1). D-006 also corrects two datasheet examples whose count byte contradicts their own text.
+The limits and the framing rule follow **D-007** (pending claude1).
+
+A claude1 checkpoint is due (4 accepted iterations). Chris decides whether this build waits for it.
+
+**Page numbers.** Every page number below is the datasheet's printed page, which is also the PDF page. NEXT 03's I2C page numbers were one page low; requirement 7 corrects them.
 
 ## Goal
-`usb_iss_app.iss` can build and parse the five I2C commands and refuses frames that break the limits. The mock emulates an I2C bus with test-defined devices. On hardware, I2C_TEST and one read on the empty bus record what the real device answers.
+`usb_iss_app.iss` can build I2C_DIRECT frames from sub-commands, refuse frames that break the limits, send them, and parse the two status bytes and the data. The mock interprets I2C_DIRECT against its `MockI2cDevice`s. On hardware, address-only frames on the empty bus, an unknown sub-command and the frame-length boundary record what the real device answers.
 
 ## Requirements
 
-### 1. Constants and limits (datasheet pp.10–13; D-006)
-- `I2C_SGL = 0x53`, `I2C_AD0 = 0x54`, `I2C_AD1 = 0x55`, `I2C_AD2 = 0x56`, `I2C_TEST = 0x58`.
-- `I2C_AD0_MAX = 60`, `I2C_AD1_MAX = 60` (reads and writes), `I2C_AD2_WRITE_MAX = 59`, `I2C_AD2_READ_MAX = 64`. Cite the page or D-006 in a comment on each.
+### 1. Constants (p.15; D-007)
+- `I2C_DIRECT = 0x57`.
+- Sub-commands:
+  - `I2C_DIRECT_START = 0x01`, `I2C_DIRECT_RESTART = 0x02`, `I2C_DIRECT_STOP = 0x03`, `I2C_DIRECT_NACK = 0x04`;
+  - READ is `0x20`–`0x2F` and WRITE is `0x30`–`0x3F`.
+- `I2C_DIRECT_FRAME_MAX = 59` (D-007: the whole frame, `0x57` included). `I2C_DIRECT_CHUNK_MAX = 16` (p.15). `I2C_DIRECT_READ_TOTAL_MAX = 60` (D-007). Cite the page or D-007 in a comment on each.
+- `I2C_DIRECT_NACK_REASONS = {0x01: "Device Error", 0x02: "Buffer Overflow", 0x03: "Buffer Underflow", 0x04: "Unknown command"}` (p.15).
+- `IssNack`: when `command == "I2C_DIRECT"`, take the reason's name from `I2C_DIRECT_NACK_REASONS`, not from `NACK_REASONS`.
+  - The message reads, for example, `"I2C_DIRECT NACK: 0x01 Device Error"`.
+  - ISS_MODE messages don't change.
+  - Update the docstring.
 
-### 2. Builders (datasheet pp.10–13, 15)
-**Addresses** take the datasheet's 8-bit form: the even write address, as in its examples (`0x40`, `0xA0`, `0xE0`).
-- Every builder raises `ValueError` unless the address is even and 0x00–0xFE.
-- Read builders send `addr | 1` (p.11: "add 1 to the device address").
+### 2. Builders (p.15)
+- `direct_read(n) -> bytes` returns `bytes([0x20 + n - 1])`. It raises `ValueError` unless 1 ≤ n ≤ 16.
+- `direct_write(data) -> bytes` returns `bytes([0x30 + len(data) - 1]) + data`. It raises `ValueError` unless 1 ≤ len(data) ≤ 16.
+- `build_i2c_direct(*parts: int | bytes) -> bytes` returns `57` followed by the parts. An `int` part is one sub-command byte (0–255); a `bytes` part is appended as is.
+  - It then walks the sub-commands and raises `ValueError` if:
+    - there are none;
+    - a sub-command byte is not in `01`–`04`, `20`–`2F` or `30`–`3F`;
+    - a WRITE is followed by fewer data bytes than its count;
+    - the frame is longer than 59 bytes;
+    - the READ counts add up to more than 60.
+  - It does not check I2C semantics, such as whether a START comes before an address.
+  - The device address is written with a WRITE like any other byte. In the p.15 example, `31 40 55` is WRITE 2: address `40`, then data `55`.
+- `i2c_direct_read_count(frame: bytes) -> int` returns the total READ bytes in a built frame, using the same walk.
 
-| Function | Frame | Other checks (`ValueError`) |
-|---|---|---|
-| `build_i2c_sgl_write(addr, value)` | `53 addr value` | value 0–255 |
-| `build_i2c_sgl_read(addr)` | `53 addr+1` | |
-| `build_i2c_ad0_write(addr, data)` | `54 addr n data…` | 1 ≤ n ≤ 60 |
-| `build_i2c_ad0_read(addr, n)` | `54 addr+1 n` | 1 ≤ n ≤ 60 |
-| `build_i2c_ad1_write(addr, reg, data)` | `55 addr reg n data…` | reg 0–255; 1 ≤ n ≤ 60 |
-| `build_i2c_ad1_read(addr, reg, n)` | `55 addr+1 reg n` | reg 0–255; 1 ≤ n ≤ 60 |
-| `build_i2c_ad2_write(addr, reg, data)` | `56 addr regH regL n data…` | reg 0–0xFFFF, high byte first (p.13); 1 ≤ n ≤ 59 |
-| `build_i2c_ad2_read(addr, reg, n)` | `56 addr+1 regH regL n` | reg 0–0xFFFF; 1 ≤ n ≤ 64 |
-| `build_i2c_test(addr)` | `58 addr` | |
-
-`n` in a write frame is `len(data)`.
-
-### 3. Parsers and helpers (datasheet pp.10–13, 15)
-- `parse_i2c_write(resp, command: str) -> None`. Applies to every write (SGL, AD0, AD1, AD2): "0x00 if the write command failed and non-zero if the write succeeded".
-  - empty → `IssTimeout`;
-  - `00` → `IssNack(None, command)`, where the message names the command, e.g. `"I2C_AD1 NACK"`;
-  - **any** non-zero byte → success. Unlike SETPINS, it need not be `FF`.
-  - Update the `IssNack` docstring to cover I2C writes.
-- `parse_i2c_read(resp, n) -> bytes`: fewer than `n` bytes → `IssTimeout`; otherwise the first `n` bytes.
-  - Add a comment: the datasheet defines no status byte for reads, so a read from an absent device can't be detected from the response.
-- `parse_i2c_test(resp) -> bool`: empty → `IssTimeout`; `00` → `False`; any other byte → `True` (p.15).
-- Helpers, each writing one frame:
-  - writes read 1 byte: `i2c_sgl_write`, `i2c_ad0_write`, `i2c_ad1_write`, `i2c_ad2_write`;
-  - reads read `n` bytes: `i2c_sgl_read(t, addr) -> int`, `i2c_ad0_read`, `i2c_ad1_read`, `i2c_ad2_read`;
-  - `i2c_test(t, addr) -> bool`.
-  - All use the transport's default 500 ms timeout (pp.10–13).
+### 3. Parser and helper (p.15)
+- `parse_i2c_direct_status(resp: bytes) -> int`:
+  - fewer than 2 bytes → `IssTimeout`;
+  - `00 rr` → `IssNack(rr, "I2C_DIRECT")`;
+  - `FF nn` → returns `nn`;
+  - any other first byte → `IssProtocolError`.
+- `i2c_direct(t, *parts) -> bytes`:
+  - builds the frame and sends it in **one** `write()` call (D-007);
+  - reads 2 bytes and parses them;
+  - reads `nn` bytes; fewer → `IssTimeout`;
+  - if `nn` differs from `i2c_direct_read_count(frame)` → `IssProtocolError` (after reading the `nn` bytes, so nothing is left behind);
+  - returns the data;
+  - uses the transport's default 500 ms timeout, as for the other I2C commands (pp.11–14).
 
 ### 4. Builder and parser tests
-- Exact bytes for every datasheet example:
-  - `53 40 00` (p.10) and `53 41` (p.11);
-  - `54 F1 02` (p.11);
-  - **`54 30 04 12 34 56 78`** (p.11, count corrected per D-006; say so in a comment);
-  - `55 E0 00 01 nn` (p.12) and `55 C1 02 02` (p.12);
-  - **`56 A0 00 00 20` + 32 data bytes = 37 bytes** (p.13, count corrected per D-006; say so in a comment);
-  - `56 A1 00 00 03` (p.13);
-  - `58 A0` (p.15).
+- Exact bytes for every datasheet example, built with the builders:
+  - `57 01 31 40 55 03` (p.15, PCF8574 write);
+  - `57 01 34 A0 00 00 12 34 03` (p.16, 24LC512 write, with `nn nn` = `12 34`);
+  - `57 01 32 A0 00 00 02 30 A1 22 04 20 03` (p.16, 4-byte read with NACK); read count 4;
+  - `57 01 32 A0 00 00 02 30 A1 23 03` (p.16, 4-byte read); read count 4.
 - Every limit at the boundary and one past it:
-  - AD0 write and read: 60 / 61;
-  - AD1 write and read: 60 / 61;
-  - AD2 write: 59 / 60. AD2 read: 64 / 65.
-- Also refused:
-  - a count of 0 (empty data, and `n = 0`);
-  - an odd address, 0xFF, 0x100 and −2;
-  - AD1 reg 256; AD2 reg 0x10000;
-  - SGL value 256.
-- Parsers: write `00` → `IssNack` with the command named; `01` and `FF` → success; empty → `IssTimeout`. Short read → `IssTimeout`. Test parser: `00`, `01`, `FF` and empty.
+  - `direct_read`: 16 and 1 are accepted; 17 and 0 are refused;
+  - `direct_write`: 16 and 1 bytes are accepted; 17 bytes and empty are refused;
+  - frame length: 58 × `I2C_DIRECT_STOP` (59 bytes) is accepted; 59 × (60 bytes) is refused;
+  - total read: `direct_read(16)` × 3 + `direct_read(12)` (60) is accepted; with `direct_read(13)` instead (61) it is refused.
+- Also refused: no parts; sub-command bytes `00`, `05`, `1F` and `40`; `build_i2c_direct(0x31, b"\x40")` (WRITE 2 with one data byte); an int part of 256.
+- Parser:
+  - `FF 00` → 0; `FF 04` → 4;
+  - `00 01` to `00 04` → `IssNack` with that `reason`, and with the name from the table in its message;
+  - `00` alone and empty → `IssTimeout`;
+  - `7F 00` → `IssProtocolError`.
 
-### 5. Mock: I2C bus (SPEC §3, "the mock"; datasheet pp.3, 10–15)
-- **Device model.** Add a small `MockI2cDevice(size=256)` with a `mem` bytearray and a `pointer`. Writes store at the pointer, reads return from it, and both post-increment with wrap-around at `size`.
-  - I2C_SGL write and read act on one byte at the pointer, like a PCF8574's latch.
-  - I2C_AD0 reads and writes at the pointer. p.11 describes I2C_AD1 or I2C_AD2 for the first read and then I2C_AD0 for later reads.
-  - I2C_AD1 sets the pointer to `reg` first; I2C_AD2 sets it to the 16-bit `reg`.
-- `MockTransport.i2c_devices: dict[int, MockI2cDevice]` is keyed by the even 8-bit address and is **empty by default**, like the bench bus.
-- **Modes.** The commands work in the I2C modes and in I2C+SERIAL.
-- **Framing.** The mock waits for the whole frame, as it does for ISS_MODE. Its bytes are never treated as commands. Frame lengths:
-  - SGL: 3 bytes for an even address, 2 for an odd one;
-  - AD0: 3 + n for a write, 3 for a read;
-  - AD1: 4 + n for a write, 4 for a read;
-  - AD2: 5 + n for a write, 5 for a read;
-  - TEST: 2.
-- **Replies:**
-  - write to a present device → `FF`. ASSUMPTION: the datasheet only says "non-zero".
-  - write to an absent address → `00`.
-  - read from a present device → `n` bytes from `mem`.
-  - read from an absent address → `n` bytes of `FF`. ASSUMPTION: the 4.7k pull-ups (p.3) hold SDA high. Hardware step 3 checks this. **If the device answers differently, make the mock match what it did, cite the log in the comment, and report it.**
-  - I2C_TEST → `FF` if present (ASSUMPTION: "non-zero"), `00` if absent.
-  - a mock-side count above the limits is not checked; the builders refuse those frames.
-- **Other modes** (IO_MODE, IO_MODE+SERIAL, SPI): consume the whole frame by the same length rules, record it in `unhandled`, and send no reply. ASSUMPTION: hardware step 4 records the real behaviour for I2C_TEST. Report it, but don't change the mock for it in this iteration.
-- Tests, through the helpers:
-  - AD1 write then AD1 read returns the same bytes at the same register;
-  - AD2 at register `0x0100` on a device with `size=0x10000`;
-  - AD1 read of 2 bytes, then AD0 read of 2 bytes, continues at the next address;
-  - SGL write then SGL read;
-  - absent address: each write → `IssNack`, each read → `FF` bytes, test → `False`. Present address: test → `True`;
-  - an AD1 write frame split across two `write()` calls: no reply until it is complete;
-  - write data containing `5A 01` → no ISS_VERSION reply;
-  - the commands work in I2C+SERIAL;
-  - in IO_MODE, `i2c_test` raises `IssTimeout`, the frame is in `unhandled`, and a following `version()` still answers correctly. That proves the whole frame was consumed.
+### 5. Mock: I2C_DIRECT (SPEC §3, "the mock"; pp.15–16; D-007)
+- **Device model.** `MockI2cDevice` gains `addr_bytes: int = 1` (0, 1 or 2). Only I2C_DIRECT uses it:
+  - in a write transaction, the first `addr_bytes` bytes after the address set the pointer, high byte first, once all of them have arrived;
+  - later bytes are written at the pointer.
 
-### 6. Carry-over from review 02 (fix cycle 1, issue 2)
-- Add one mock test: GETAD on a pin that is not general I/O returns 0.
-  - In I2C_S_100KHZ with IO_TYPE `0xAA` and all `adc` non-zero: channels 3 and 4 → 0, channels 1 and 2 → their `adc` values.
-  - In IO_MODE+SERIAL: channels 1 and 2 → 0.
-  - This test must fail if the `_general_pins()` check in `MockTransport._getad` is removed. Check this by trying it, then restore the code, and say in build.md that you did.
-- This is a new test. Existing tests stay unchanged.
+  I2C_SGL, I2C_AD0, I2C_AD1 and I2C_AD2 behave as before.
+- **Framing (D-007).** When `0x57` is at the head of the buffer, the frame is everything from it to the end of the bytes received in that `write()` call. The mock does not wait for a later `write()`, just as for SERIAL_IO.
+- **In the I2C modes and I2C+SERIAL:**
+  - A frame longer than 59 bytes → `00 02`, and nothing is executed.
+  - Otherwise, walk the sub-commands in order:
+    - START or RESTART: the next byte written is an address.
+    - WRITE k: if fewer than k bytes remain → `00 03`, and stop.
+      - If an address is expected, the first byte is the address, and the device is `i2c_devices.get(b & 0xFE)`. If it is absent → `00 01`, and stop. ASSUMPTION: the device stops at the first unacknowledged address. The address's low bit selects write or read.
+      - The other bytes go to the device addressed for writing (pointer bytes, then data, as above). If no device is addressed for writing, they are discarded.
+    - READ k: k bytes from the device addressed for reading, appended to the read buffer. If no device is addressed for reading → k × `FF`. ASSUMPTION: the pull-ups hold SDA high, which matches iteration 03's empty-bus read.
+    - NACK has no effect in the mock. STOP ends the transaction, so the next address needs a START.
+    - Any other byte → `00 04`, and stop.
+  - At the end of the frame → `FF n` followed by the n bytes read.
+  - The mock does not check the total read count; the builder refuses those frames.
+- **Other modes** (IO_MODE, IO_MODE+SERIAL, SPI): consume the frame, record it in `unhandled`, and send no reply. ASSUMPTION; hardware step 5 records IO_MODE.
+- **Tests, through `i2c_direct`** (raw `write()` where noted):
+  - p.15 example against a device at `0x40` with `addr_bytes=0`: returns `b""`, and `mem[0] == 0x55`.
+  - p.16 examples against a device at `0xA0` with `size=0x10000` and `addr_bytes=2`. Pre-fill `mem[2:4]`, then send the write example (`12 34` at `0x0000`). Both read examples then return the 4 bytes from `0x0000`.
+  - An I2C_DIRECT write to a device with `addr_bytes=1` reads back through `i2c_ad1_read` at the same register.
+  - Absent address → `IssNack` with reason 1.
+  - Raw `57 01 31 40` in one `write()` → `00 03`.
+  - Raw `57 05` → `00 04`.
+  - Raw `57` + 59 × `03` (60 bytes) → `00 02`. Raw `57` + 58 × `03` (59 bytes) → `FF 00`.
+  - Split frame: raw `57 01 31` → `00 03` straight away. A following raw `40 55 03` gets no reply, and its bytes are in `unhandled`.
+  - `5A 01` inside WRITE data is stored as data: no ISS_VERSION reply, and `unhandled` stays empty.
+  - The commands work in I2C+SERIAL.
+  - In IO_MODE, `i2c_direct` raises `IssTimeout`, the frame is in `unhandled`, and a following `version()` answers mode 0x00.
+
+### 6. Carry-over: I2C_TEST in IO_MODE (review 03, issue 2)
+- In IO_MODE (mode byte `0x00`), the mock answers I2C_TEST with `00`. The comment cites `docs/iterations/03/logs/build-hw-20261017-233218.txt` and `review-hw-20261018-001847.txt`.
+- IO_MODE+SERIAL and SPI don't change (no reply; ASSUMPTION). The other I2C register commands don't change in IO_MODE.
+- Change `test_i2c.py::test_mock_io_mode_consumes_frame`:
+  - `i2c_test` now returns `False`, and `58 A0` is not in `unhandled`;
+  - the AD1-write half of the test stays as it is.
+
+  This is the only iteration 03 test whose assertions you may change.
+- Add a test: in IO_MODE+SERIAL, `i2c_test` still raises `IssTimeout`, and the frame is in `unhandled`.
+
+### 7. Carry-over: page citations (review 03, issue 1)
+Comment-only change in `iss.py`, `mock.py`, `test_i2c.py` and `test_hw.py`. Move every I2C page citation added in iteration 03 up by one:
+- I2C_SGL write p.11, read p.12; I2C_AD0 p.12; I2C_AD1 p.13; I2C_AD2 p.14; I2C_TEST p.16.
+- `pp.10-13` → `pp.11-14`, and `pp.10-15` → `pp.11-16`.
+- Remove `(PDF page numbers, as in NEXT 03)` and every `(printed p.N)` note.
+- p.3 (pull-ups) is already correct.
+
+### 8. Carry-over: IO_TYPE bytes in an iteration 01 hardware test (review 03, issue 3)
+Change only `tests/test_hw.py::test_hw_mode_sequence`:
+- I2C mode IO_TYPE `0x0A` → `0xAA`, in both the set and the restore, and in their labels.
+- IO_CHANGE `0x0F` → `0xAF` (I/O1 and I/O2 analogue input, I/O3 and I/O4 digital input), and its label.
+
+Nothing else in that test changes. Reason: HARDWARE.md says "In every IO_TYPE byte, set unused pin pairs to digital input (`10`), never output".
 
 ## Constraints / out of scope
-- No I2C_DIRECT and no SPI command (iteration 04). No GUI.
-- No I2C **write** on hardware.
+- No SPI command (iteration 05). No GUI.
+- No data byte written to any I2C address on hardware (see below).
 - Do not edit SPEC, DECISIONS, HARDWARE, the role files, the templates, LOG or CHANGES.
 - No new dependencies.
-- If D-006 looks wrong to you, follow it anyway and say why in build.md.
+- If D-007 looks wrong to you, follow it anyway and say why in build.md.
+- The iteration 00–03 tests stay unchanged, except for `test_mock_io_mode_consumes_frame` (requirement 6), `test_hw_mode_sequence` (requirement 8) and comment-only edits (requirement 7).
 
 ## Hardware tests
-**safe-read + one empty-bus I2C read.** `docs/HARDWARE.md`:
-- SCL and SDA (I/O3 and I/O4) are **not connected**. The GY module's own SCL and SDA must never be connected in serial mode, and aren't. The board's 4.7k pull-ups (p.3) hold the bus high.
-- So the only I2C traffic is an address, plus one register byte, on an empty bus. No I2C write command (SGL, AD0, AD1 or AD2 write) is sent.
-- I/O1 and I/O2 stay digital inputs (IO_TYPE `0xAA`) in every mode used. I/O1 is driven by the module's TX. No serial mode is entered.
+**safe-read + address-only I2C_DIRECT on the empty bus.** `docs/HARDWARE.md`:
+- SCL and SDA (I/O3 and I/O4) are **not connected**. In the I2C modes the board's 4.7k pull-ups hold the bus high; in the other modes they are disconnected (p.3).
+- I/O1 and I/O2 stay digital inputs (IO_TYPE `0xAA`) in every mode used. I/O1 is driven by the module's TX.
+- No serial mode is entered. **No SPI mode is entered:** in SPI mode I/O1 becomes the CE output (p.3), and HARDWARE.md forbids I/O1 as an output.
+- The only bus traffic is START, one address byte (`A0`) and STOP conditions. No data byte is written to any address.
 
-Sequence: one test or several. A fixture or `finally` must always run the restore step, as in `io_hw`.
-1. `5A 02 40 AA` (I2C_S_100KHZ; I/O1 and I/O2 digital input) → `FF 00`; ISS_VERSION mode == 0x40.
-2. Raw `58 A0`, then raw `58 66`. 0x66 is the MLX90640's address 0x33 in 8-bit form; that device is not on this bus. Read each with `n = 2` and log the raw response. Assert exactly 1 byte each, but **don't assert its value**. The expected answer is `00`; anything else is a finding to report.
-3. Raw I2C_AD1 read `55 A1 00 01`, read with `n = 3`, and log the raw response (it may be empty). Assert nothing about it. Then ISS_VERSION: assert mode == 0x40. This shows the device still answers and no stray byte is left over.
-4. `5A 02 00 AA` (IO_MODE, all digital input) → mode == 0x00. Raw `58 A0`, read with `n = 2`, and log the raw response (it may be empty). Assert nothing about it. Then ISS_VERSION: assert mode == 0x00.
-5. Restore: `5A 02 40 AA` → `FF 00`; mode == 0x40.
+Sequence: one test or several. The `io_hw` fixture, or a `finally`, must always run the restore step. Send each I2C_DIRECT frame in **one** `write()` call.
+1. `5A 02 40 AA` (I2C_S_100KHZ) → mode 0x40.
+2. Raw `57 01 30 A0 03` (START, WRITE 1: address `A0`, STOP). Read with `n = 4` and log the raw response. Assert nothing about it; the expected answer is `00 01`. Then ISS_VERSION: assert mode == 0x40.
+3. Raw `57 05` (unknown sub-command). Read with `n = 4` and log. Assert nothing; expected `00 04`. Then ISS_VERSION: assert mode == 0x40.
+4. Frame-length boundary, STOP conditions only. Read each with `n = 4` and log; assert nothing.
+   - Raw `57` + 58 × `03` (59 bytes); expected `FF 00`.
+   - Raw `57` + 59 × `03` (60 bytes). Under D-007's reading the expected answer is `00 02`. `FF 00` would mean the command byte does not count.
+   - Then ISS_VERSION: assert mode == 0x40.
+5. `5A 02 00 AA` (IO_MODE) → mode 0x00. Raw `57 01 30 A0 03`, read with `n = 4`, and log. Assert nothing. Then ISS_VERSION: assert mode == 0x00.
+6. Restore: `5A 02 40 AA` → mode 0x40.
+
+**When the device disagrees with the mock:**
+- Steps 2, 3 and 5: make the mock match what the device did. Cite the log in the comment, adjust the affected mock test, and report it.
+- Step 4: if the device disagrees, make the mock's overflow response match the device, but **keep the builder limit at 59** (D-007). Report it.
 
 ## Acceptance criteria
-- [ ] `.venv/bin/python scripts/run_tests.py --iter 03 --tag build` exits 0. The new tests cover requirements 1–6 as listed, including every datasheet example frame, every limit boundary and the D-006 corrected counts.
-- [ ] `.venv/bin/python scripts/run_tests.py --iter 03 --hw --tag build` exits 0. The log shows the raw responses of steps 2, 3 and 4, and the device is left in mode 0x40.
+- [ ] `.venv/bin/python scripts/run_tests.py --iter 04 --tag build` exits 0. The new tests cover requirements 1–8 as listed, including every p.15–16 example frame and every limit boundary.
+- [ ] `.venv/bin/python scripts/run_tests.py --iter 04 --hw --tag build` exits 0. The log shows:
+  - the raw responses of steps 2–5;
+  - the device left in mode 0x40;
+  - `test_hw_mode_sequence` labels showing `5A 02 40 AA` and `5A 02 10 AF`.
 - [ ] The final logged runs' headers show the tested commit as `(clean)`.
-- [ ] The iteration 00–02 tests still pass, unchanged. Requirement 6 is an added test.
+- [ ] The iteration 00–03 tests pass and are unchanged, apart from the exceptions listed in the constraints.
 
 ## Report back
-- The raw responses from hardware steps 2–4. For step 3, say whether the mock's absent-device read matched the device, and what you changed if it didn't.
-- Anything on pp.10–15 you found ambiguous. Note it; don't test it on hardware. Examples: I2C_SGL reads have no status byte; I2C_AD0 has no documented limit.
+- The raw responses from hardware steps 2–5, whether the mock matched each one, and what you changed if it didn't.
+- Whether step 4 supports D-007's reading of "< 60 bytes".
+- Anything on pp.15–16 you found ambiguous. Note it; don't test it on hardware. Examples: what the device does after a NACK partway through a frame; whether a frame must end with STOP; what the NACK sub-command changes when it is not followed by a READ.
