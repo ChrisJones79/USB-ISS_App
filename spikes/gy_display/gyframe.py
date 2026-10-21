@@ -10,6 +10,7 @@ Frame format, GY manual §IV.2-3 and SPIKE-gy-display.md step 1:
 from __future__ import annotations
 
 import struct
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -95,6 +96,7 @@ class SpikeLog:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         self.path = logs / f"{name}-{stamp}.log"
         self._f = self.path.open("x", encoding="utf-8")
+        self._lock = threading.Lock()  # the viewer logs from the GUI thread and the worker
 
     def open_raw(self):
         """Raw received bytes, next to the log, same stamp. Also never overwrites."""
@@ -102,9 +104,11 @@ class SpikeLog:
 
     def __call__(self, msg: str) -> None:
         line = f"{time.strftime('%H:%M:%S')} {msg}"
-        print(line, flush=True)
-        self._f.write(line + "\n")
-        self._f.flush()
+        with self._lock:
+            print(line, flush=True)
+            self._f.write(line + "\n")
+            self._f.flush()
 
     def close(self) -> None:
-        self._f.close()
+        with self._lock:
+            self._f.close()

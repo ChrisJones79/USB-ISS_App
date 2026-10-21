@@ -16,7 +16,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter
-from PySide6.QtWidgets import QApplication, QGridLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QCheckBox, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel,
+                               QVBoxLayout, QWidget)
 
 from gyframe import COLS, ROWS, Frame, FrameParser, SpikeLog
 
@@ -150,15 +151,22 @@ def colour(x: float) -> QColor:
 
 
 class Heatmap(QWidget):
-    """32x24 cells. Pixel i is row i // 32, column i % 32 + 1; column 1 is drawn on the right (GY manual p.3)."""
+    """32x24 cells. Pixel i is row i // 32, column i % 32 + 1; column 1 is drawn on the right (GY manual p.3).
+
+    Colour scale: auto (each frame's own min..max) unless a fixed (lo, hi) range is set.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.setFixedSize(COLS * CELL, ROWS * CELL)
         self._img: QImage | None = None
+        self.fixed: tuple[float, float] | None = None
+
+    def scale(self, f: Frame) -> tuple[float, float]:
+        return self.fixed if self.fixed else (f.min, f.max)
 
     def show_frame(self, f: Frame) -> None:
-        lo, hi = f.min, f.max
+        lo, hi = self.scale(f)
         span = (hi - lo) or 1.0
         img = QImage(COLS, ROWS, QImage.Format.Format_RGB32)
         for i, temp in enumerate(f.pixels):
@@ -178,30 +186,67 @@ class Heatmap(QWidget):
 
 
 class Window(QWidget):
-    def __init__(self, worker: PollWorker, log: SpikeLog) -> None:
+    def __init__(self, worker: PollWorker, log: SpikeLog, fixed: tuple[float, float] | None = None) -> None:
         super().__init__()
         self._worker, self._log = worker, log
         self.setWindowTitle("GY-MCU90640 via USB-ISS (spike)")
         self.heat = Heatmap()
-        self.labels = {k: QLabel("-") for k in ("min", "max", "Ta", "frames/s", "checksum fail", "good", "polls/s")}
+        self.labels = {k: QLabel("-") for k in ("min", "max", "Ta", "scale", "frames/s", "checksum fail", "good", "polls/s")}
         grid = QGridLayout()
         for n, (k, lab) in enumerate(self.labels.items()):
             grid.addWidget(QLabel(k + ":"), n // 4, (n % 4) * 2)
             grid.addWidget(lab, n // 4, (n % 4) * 2 + 1)
+
+        # Colour scale: auto by default; fixed lo..hi when ticked.
+        self.fixed_box = QCheckBox("fixed range")
+        self.lo_spin, self.hi_spin = QDoubleSpinBox(), QDoubleSpinBox()
+        for s, v in ((self.lo_spin, 15.0), (self.hi_spin, 35.0)):
+            s.setRange(-40.0, 300.0)  # GY manual: measuring range
+            s.setDecimals(1)
+            s.setSuffix(" °C")
+            s.setValue(v)
+        if fixed:
+            self.lo_spin.setValue(fixed[0])
+            self.hi_spin.setValue(fixed[1])
+            self.fixed_box.setChecked(True)
+        scale_row = QHBoxLayout()
+        scale_row.addWidget(self.fixed_box)
+        scale_row.addWidget(QLabel("from"))
+        scale_row.addWidget(self.lo_spin)
+        scale_row.addWidget(QLabel("to"))
+        scale_row.addWidget(self.hi_spin)
+        scale_row.addStretch()
+        for w in (self.fixed_box, self.lo_spin, self.hi_spin):
+            (w.toggled if w is self.fixed_box else w.valueChanged).connect(self.on_scale_changed)
+
         self.status = QLabel("")
         lay = QVBoxLayout(self)
         lay.addWidget(self.heat)
         lay.addLayout(grid)
+        lay.addLayout(scale_row)
         lay.addWidget(self.status)
+        self.on_scale_changed()
         worker.frame.connect(self.on_frame)
         worker.stats.connect(self.on_stats)
         worker.failed.connect(self.on_failed)
 
+    def on_scale_changed(self, *_args) -> None:
+        lo, hi = self.lo_spin.value(), self.hi_spin.value()
+        if self.fixed_box.isChecked() and hi <= lo:
+            self.status.setText("fixed range ignored: 'to' must be above 'from'")
+            self.heat.fixed = None
+        else:
+            self.status.setText("")
+            self.heat.fixed = (lo, hi) if self.fixed_box.isChecked() else None
+        self._log(f"colour scale {'fixed %.1f..%.1f C' % self.heat.fixed if self.heat.fixed else 'auto'}")
+
     def on_frame(self, f: Frame) -> None:
         self.heat.show_frame(f)
+        lo, hi = self.heat.scale(f)
         self.labels["min"].setText(f"{f.min:.2f} °C")
         self.labels["max"].setText(f"{f.max:.2f} °C")
         self.labels["Ta"].setText(f"{f.ta:.2f} °C")
+        self.labels["scale"].setText(f"{'fixed' if self.heat.fixed else 'auto'} {lo:.1f}..{hi:.1f} °C")
 
     def on_stats(self, s: dict) -> None:
         self.labels["frames/s"].setText(f"{s['fps']:.2f}")
@@ -225,13 +270,17 @@ def main() -> int:
     ap.add_argument("--replay", type=Path, help="play a capture .bin instead of opening the port")
     ap.add_argument("--snapshot", type=Path, help="after --seconds, save the window to this PNG and close")
     ap.add_argument("--seconds", type=float, default=0, help="close automatically after this many seconds")
+    ap.add_argument("--fixed", type=float, nargs=2, metavar=("LO", "HI"),
+                    help="start with a fixed colour range in degC (default: auto range per frame)")
     args = ap.parse_args()
+    if args.fixed and args.fixed[1] <= args.fixed[0]:
+        ap.error("--fixed: HI must be above LO")
 
     app = QApplication(sys.argv)
     log = SpikeLog("view-replay" if args.replay else "view")
     log(f"log {log.path.name}; {'replay ' + str(args.replay) if args.replay else 'live'}")
     worker = PollWorker(log, args.replay)
-    win = Window(worker, log)
+    win = Window(worker, log, tuple(args.fixed) if args.fixed else None)
     win.show()
     worker.start()
     if args.seconds:

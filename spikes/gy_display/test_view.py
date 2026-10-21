@@ -13,7 +13,7 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from gyframe import COLS, PIXELS, ROWS, Frame  # noqa: E402
-from view import CELL, Heatmap  # noqa: E402
+from view import CELL, Heatmap, colour  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -51,6 +51,24 @@ def test_every_stream_pixel_lands_in_its_own_cell(heat):
     # monotonic ramp: pixel 0 is the coldest (top right), pixel 767 the hottest (bottom left)
     assert cell(img, COLS - 1, 0) == "#000000"
     assert cell(img, 0, ROWS - 1) == "#ffffff"
+
+
+def test_fixed_range_clamps_and_auto_is_default(heat):
+    assert heat.fixed is None
+    px = [20.0] * PIXELS
+    px[0], px[1] = 10.0, 50.0  # below and above the range
+    try:
+        heat.fixed = (15.0, 35.0)
+        img = render(heat, px)
+        assert cell(img, 31, 0) == "#000000"  # 10 C clamps to the bottom colour
+        assert cell(img, 30, 0) == "#ffffff"  # 50 C clamps to the top colour
+        assert cell(img, 0, 0) == colour(0.25).name()  # 20 C is a quarter of 15..35
+    finally:
+        heat.fixed = None
+    img = render(heat, px)  # auto: 20 C is (20-10)/(50-10) of this frame's range
+    assert cell(img, 0, 0) == colour(0.25).name()
+    px[1] = 30.0
+    assert cell(render(heat, px), 0, 0) == colour(0.5).name()
 
 
 @pytest.mark.parametrize("i, x, y", [(0, 31, 0), (31, 0, 0), (736, 31, 23), (767, 0, 23)])
