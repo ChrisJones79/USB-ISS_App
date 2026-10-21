@@ -1,0 +1,18 @@
+20:30:47 log capture-20261020-203047.log; duration 30 s
+20:30:47 version: module_id 7 firmware 0x09 mode 0x40 (I2C_S_100KHZ)
+20:30:47 serial number 00069221
+20:30:47 set_mode 5A 02 01 00 19 AA
+20:30:47 mode byte read back 0x01 (IO_MODE+SERIAL)
+20:31:17 elapsed 30.00 s
+20:31:17 polls 160353 (5345.1/s); NACKs 0
+20:31:17 total bytes 182422 (6081 B/s; 115200 8N1 line max ~11520 B/s)
+20:31:17 polls returning the full 62 bytes (possible overflow): 0
+20:31:17 rx count histogram: 0:91344 1:99 2:27064 3:40094 4:1654 5:17 6:13 7:5 8:5 9:3 10:1 11:4 12:6 13:10 14:11 15:2 16:2 17:1 18:1 19:3 20:1 24:1 28:1 32:2 33:2 34:1 35:1 37:1 38:1 39:1 41:1 42:1
+20:31:17 first rx bytes: 5A 5A
+20:31:17 frames found 118; checksum pass 118, fail 0 (0.0% fail)
+20:31:17 bytes discarded while resyncing 0
+20:31:17 good-frame rate 3.93 /s over the run
+20:31:17 good-frame rate 3.94 /s between first and last good frame
+20:31:17 last good frame: min 16.89 C, max 25.18 C, Ta 27.17 C
+20:31:17 raw stream saved to capture-20261020-203047.bin
+20:31:17 port closed
