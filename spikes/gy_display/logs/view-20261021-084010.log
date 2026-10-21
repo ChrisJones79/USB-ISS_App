@@ -1,0 +1,18 @@
+08:40:10 log view-20261021-084010.log; live
+08:40:10 version: module_id 7 firmware 0x09 mode 0x01 (IO_MODE+SERIAL)
+08:40:10 set_mode 5A 02 01 00 19 AA
+08:40:10 mode byte read back 0x01 (IO_MODE+SERIAL)
+08:40:15 t 5.0 s: polls/s 5184, bytes 30880, full polls 0, good 20, checksum fail 0, discarded 0, fps 4.00, frames shown 20
+08:40:20 t 10.0 s: polls/s 5182, bytes 60898, full polls 0, good 39, checksum fail 0, discarded 0, fps 4.00, frames shown 39
+08:40:25 t 15.0 s: polls/s 5212, bytes 91096, full polls 0, good 59, checksum fail 0, discarded 0, fps 4.00, frames shown 59
+08:40:30 t 20.0 s: polls/s 5211, bytes 121976, full polls 0, good 79, checksum fail 0, discarded 0, fps 4.00, frames shown 79
+08:40:35 t 25.0 s: polls/s 5222, bytes 152204, full polls 0, good 98, checksum fail 0, discarded 0, fps 4.00, frames shown 98
+08:40:40 t 30.0 s: polls/s 5226, bytes 182192, full polls 0, good 118, checksum fail 0, discarded 0, fps 4.00, frames shown 118
+08:40:45 t 35.0 s: polls/s 5228, bytes 213072, full polls 0, good 138, checksum fail 0, discarded 0, fps 4.00, frames shown 138
+08:40:50 t 40.0 s: polls/s 5235, bytes 243520, full polls 0, good 157, checksum fail 0, discarded 0, fps 4.00, frames shown 157
+08:40:55 t 45.0 s: polls/s 5241, bytes 273503, full polls 0, good 177, checksum fail 0, discarded 0, fps 4.00, frames shown 177
+08:40:58 window closed
+08:40:58 stop requested
+08:40:58 t 47.8 s: polls/s 5242, bytes 290272, full polls 0, good 188, checksum fail 0, discarded 0, fps 4.00, frames shown 188
+08:40:58 port closed
+08:40:58 exit 0

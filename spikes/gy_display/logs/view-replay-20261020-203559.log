@@ -1,0 +1,7 @@
+20:35:59 log view-replay-20261020-203559.log; replay spikes/gy_display/logs/capture-20261020-203047.bin
+20:35:59 replay spikes/gy_display/logs/capture-20261020-203047.bin (182422 bytes) at ~6000 B/s
+20:36:03 snapshot saved to /tmp/claude-1000/-home-chris-claude-USB-ISS-App/43a7f1b3-c18d-4d43-8bb4-4e9c74ad5075/scratchpad/replay.png
+20:36:03 window closed
+20:36:03 stop requested
+20:36:03 t 3.8 s: polls/s 478, bytes 22861, full polls 0, good 14, checksum fail 0, discarded 0, fps 3.50, frames shown 14
+20:36:03 exit 0
