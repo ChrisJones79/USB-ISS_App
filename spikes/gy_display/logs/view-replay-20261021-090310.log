@@ -1,0 +1,7 @@
+09:03:10 log view-replay-20261021-090310.log; replay spikes/gy_display/logs/capture-20261020-203047.bin
+09:03:10 colour scale fixed 20.0..21.0 C
+09:03:10 replay spikes/gy_display/logs/capture-20261020-203047.bin (182422 bytes) at ~6000 B/s
+09:03:12 window closed
+09:03:12 stop requested
+09:03:12 t 1.9 s: polls/s 478, bytes 11390, full polls 0, good 7, checksum fail 0, discarded 0, fps 3.50, frames shown 7
+09:03:12 exit 0

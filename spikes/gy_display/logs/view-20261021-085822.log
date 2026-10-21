@@ -1,0 +1,90 @@
+08:58:22 log view-20261021-085822.log; live
+08:58:23 colour scale fixed 20.0..35.0 C
+08:58:23 version: module_id 7 firmware 0x09 mode 0x01 (IO_MODE+SERIAL)
+08:58:23 set_mode 5A 02 01 00 19 AA
+08:58:23 mode byte read back 0x01 (IO_MODE+SERIAL)
+08:58:28 t 5.0 s: polls/s 5175, bytes 30672, full polls 0, good 19, checksum fail 0, discarded 0, fps 3.50, frames shown 19
+08:58:33 t 10.0 s: polls/s 5184, bytes 60653, full polls 0, good 39, checksum fail 0, discarded 0, fps 4.00, frames shown 39
+08:58:38 t 15.0 s: polls/s 5199, bytes 91096, full polls 0, good 59, checksum fail 0, discarded 0, fps 4.00, frames shown 59
+08:58:39 colour scale fixed 20.0..34.0 C
+08:58:39 colour scale fixed 20.0..33.0 C
+08:58:39 colour scale fixed 20.0..32.0 C
+08:58:39 colour scale fixed 20.0..31.0 C
+08:58:39 colour scale fixed 20.0..30.0 C
+08:58:39 colour scale fixed 20.0..29.0 C
+08:58:39 colour scale fixed 20.0..28.0 C
+08:58:39 colour scale fixed 20.0..27.0 C
+08:58:39 colour scale fixed 20.0..26.0 C
+08:58:40 colour scale fixed 20.0..27.0 C
+08:58:40 colour scale fixed 20.0..28.0 C
+08:58:41 colour scale fixed 20.0..27.0 C
+08:58:41 colour scale fixed 20.0..26.0 C
+08:58:41 colour scale fixed 20.0..25.0 C
+08:58:41 colour scale fixed 20.0..24.0 C
+08:58:41 colour scale fixed 20.0..23.0 C
+08:58:41 colour scale fixed 20.0..22.0 C
+08:58:41 colour scale fixed 20.0..21.0 C
+08:58:41 colour scale auto
+08:58:41 colour scale auto
+08:58:42 colour scale auto
+08:58:43 t 20.0 s: polls/s 5207, bytes 121976, full polls 0, good 79, checksum fail 0, discarded 0, fps 4.00, frames shown 79
+08:58:43 colour scale auto
+08:58:45 colour scale auto
+08:58:45 colour scale auto
+08:58:45 colour scale auto
+08:58:45 colour scale auto
+08:58:46 colour scale auto
+08:58:46 colour scale auto
+08:58:47 colour scale auto
+08:58:48 t 25.0 s: polls/s 5219, bytes 151995, full polls 0, good 98, checksum fail 0, discarded 0, fps 4.00, frames shown 98
+08:58:48 colour scale auto
+08:58:48 colour scale auto
+08:58:48 colour scale auto
+08:58:48 colour scale auto
+08:58:48 colour scale fixed 14.0..15.0 C
+08:58:48 colour scale fixed 13.0..15.0 C
+08:58:49 colour scale fixed 12.0..15.0 C
+08:58:50 colour scale fixed 12.0..16.0 C
+08:58:50 colour scale fixed 12.0..17.0 C
+08:58:51 colour scale fixed 12.0..18.0 C
+08:58:51 colour scale fixed 12.0..19.0 C
+08:58:52 colour scale fixed 12.0..20.0 C
+08:58:53 t 30.0 s: polls/s 5225, bytes 182192, full polls 0, good 118, checksum fail 0, discarded 0, fps 4.00, frames shown 118
+08:58:54 colour scale fixed 12.0..21.0 C
+08:58:54 colour scale fixed 12.0..22.0 C
+08:58:55 colour scale fixed 12.0..23.0 C
+08:58:55 colour scale fixed 12.0..24.0 C
+08:58:55 colour scale fixed 12.0..25.0 C
+08:58:55 colour scale fixed 12.0..26.0 C
+08:58:56 colour scale fixed 12.0..27.0 C
+08:58:57 colour scale fixed 12.0..28.0 C
+08:58:57 colour scale fixed 12.0..29.0 C
+08:58:58 colour scale fixed 12.0..30.0 C
+08:58:58 t 35.0 s: polls/s 5228, bytes 213072, full polls 0, good 138, checksum fail 0, discarded 0, fps 4.00, frames shown 138
+08:58:59 colour scale fixed 13.0..30.0 C
+08:58:59 colour scale fixed 14.0..30.0 C
+08:58:59 colour scale fixed 15.0..30.0 C
+08:59:00 colour scale fixed 16.0..30.0 C
+08:59:00 colour scale fixed 17.0..30.0 C
+08:59:00 colour scale fixed 18.0..30.0 C
+08:59:00 colour scale fixed 19.0..30.0 C
+08:59:01 colour scale fixed 20.0..30.0 C
+08:59:01 colour scale fixed 21.0..30.0 C
+08:59:03 t 40.0 s: polls/s 5234, bytes 243297, full polls 0, good 157, checksum fail 0, discarded 0, fps 4.00, frames shown 157
+08:59:03 colour scale fixed 22.0..30.0 C
+08:59:03 colour scale fixed 23.0..30.0 C
+08:59:04 colour scale fixed 24.0..30.0 C
+08:59:04 colour scale fixed 23.0..30.0 C
+08:59:04 colour scale fixed 22.0..30.0 C
+08:59:05 colour scale fixed 21.0..30.0 C
+08:59:05 colour scale fixed 20.0..30.0 C
+08:59:05 colour scale fixed 19.0..30.0 C
+08:59:05 colour scale fixed 18.0..30.0 C
+08:59:06 colour scale fixed 19.0..30.0 C
+08:59:06 colour scale fixed 20.0..30.0 C
+08:59:08 t 45.0 s: polls/s 5234, bytes 273288, full polls 0, good 177, checksum fail 0, discarded 0, fps 4.00, frames shown 177
+08:59:12 window closed
+08:59:12 stop requested
+08:59:12 t 49.8 s: polls/s 5234, bytes 302818, full polls 0, good 196, checksum fail 0, discarded 0, fps 4.00, frames shown 196
+08:59:12 port closed
+08:59:12 exit 0

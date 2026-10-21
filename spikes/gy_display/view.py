@@ -185,8 +185,13 @@ class Heatmap(QWidget):
             p.drawImage(self.rect(), self._img)  # nearest-neighbour scaling: one block per cell
 
 
+MIN_GAP = 1.0  # degC: the fixed range's 'to' is always at least this far above 'from'
+T_LO, T_HI = -40.0, 300.0  # GY manual: measuring range
+
+
 class Window(QWidget):
-    def __init__(self, worker: PollWorker, log: SpikeLog, fixed: tuple[float, float] | None = None) -> None:
+    def __init__(self, worker: PollWorker, log, fixed: tuple[float, float] | None = None) -> None:
+        """log: any callable taking one string (a SpikeLog in use; a stub in tests)."""
         super().__init__()
         self._worker, self._log = worker, log
         self.setWindowTitle("GY-MCU90640 via USB-ISS (spike)")
@@ -197,11 +202,12 @@ class Window(QWidget):
             grid.addWidget(QLabel(k + ":"), n // 4, (n % 4) * 2)
             grid.addWidget(lab, n // 4, (n % 4) * 2 + 1)
 
-        # Colour scale: auto by default; fixed lo..hi when ticked.
+        # Colour scale: auto by default; fixed lo..hi when ticked. Changing either end pushes the
+        # other one so that hi - lo >= MIN_GAP; the bounds leave room for the push.
         self.fixed_box = QCheckBox("fixed range")
         self.lo_spin, self.hi_spin = QDoubleSpinBox(), QDoubleSpinBox()
-        for s, v in ((self.lo_spin, 15.0), (self.hi_spin, 35.0)):
-            s.setRange(-40.0, 300.0)  # GY manual: measuring range
+        for s, v, lo, hi in ((self.lo_spin, 15.0, T_LO, T_HI - MIN_GAP), (self.hi_spin, 35.0, T_LO + MIN_GAP, T_HI)):
+            s.setRange(lo, hi)
             s.setDecimals(1)
             s.setSuffix(" °C")
             s.setValue(v)
@@ -216,8 +222,9 @@ class Window(QWidget):
         scale_row.addWidget(QLabel("to"))
         scale_row.addWidget(self.hi_spin)
         scale_row.addStretch()
-        for w in (self.fixed_box, self.lo_spin, self.hi_spin):
-            (w.toggled if w is self.fixed_box else w.valueChanged).connect(self.on_scale_changed)
+        self.fixed_box.toggled.connect(self.on_scale_changed)
+        self.lo_spin.valueChanged.connect(self.on_lo_changed)
+        self.hi_spin.valueChanged.connect(self.on_hi_changed)
 
         self.status = QLabel("")
         lay = QVBoxLayout(self)
@@ -230,14 +237,28 @@ class Window(QWidget):
         worker.stats.connect(self.on_stats)
         worker.failed.connect(self.on_failed)
 
+    @staticmethod
+    def _too_close(lo: float, hi: float) -> bool:
+        return round(hi - lo, 1) < MIN_GAP  # the spin boxes hold one decimal; avoid float noise
+
+    @staticmethod
+    def _set_quietly(spin: QDoubleSpinBox, v: float) -> None:
+        spin.blockSignals(True)
+        spin.setValue(v)
+        spin.blockSignals(False)
+
+    def on_lo_changed(self, lo: float) -> None:
+        if self._too_close(lo, self.hi_spin.value()):
+            self._set_quietly(self.hi_spin, lo + MIN_GAP)  # 'from' moved up: push 'to' up
+        self.on_scale_changed()
+
+    def on_hi_changed(self, hi: float) -> None:
+        if self._too_close(self.lo_spin.value(), hi):
+            self._set_quietly(self.lo_spin, hi - MIN_GAP)  # 'to' moved down: push 'from' down
+        self.on_scale_changed()
+
     def on_scale_changed(self, *_args) -> None:
-        lo, hi = self.lo_spin.value(), self.hi_spin.value()
-        if self.fixed_box.isChecked() and hi <= lo:
-            self.status.setText("fixed range ignored: 'to' must be above 'from'")
-            self.heat.fixed = None
-        else:
-            self.status.setText("")
-            self.heat.fixed = (lo, hi) if self.fixed_box.isChecked() else None
+        self.heat.fixed = (self.lo_spin.value(), self.hi_spin.value()) if self.fixed_box.isChecked() else None
         self._log(f"colour scale {'fixed %.1f..%.1f C' % self.heat.fixed if self.heat.fixed else 'auto'}")
 
     def on_frame(self, f: Frame) -> None:
@@ -273,8 +294,10 @@ def main() -> int:
     ap.add_argument("--fixed", type=float, nargs=2, metavar=("LO", "HI"),
                     help="start with a fixed colour range in degC (default: auto range per frame)")
     args = ap.parse_args()
-    if args.fixed and args.fixed[1] <= args.fixed[0]:
-        ap.error("--fixed: HI must be above LO")
+    if args.fixed:
+        lo, hi = args.fixed
+        if not (T_LO <= lo and hi <= T_HI and round(hi - lo, 1) >= MIN_GAP):
+            ap.error(f"--fixed: need {T_LO:g} <= LO, HI <= {T_HI:g} and HI - LO >= {MIN_GAP:g}")
 
     app = QApplication(sys.argv)
     log = SpikeLog("view-replay" if args.replay else "view")

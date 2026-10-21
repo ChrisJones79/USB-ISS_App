@@ -34,8 +34,9 @@ Live runs (all exited 0 and logged `port closed`):
 | `logs/view-20261020-203614.log` | 43,308 s (~12 h) | 170,485 | 8 | 0 | 12,137 | Unplanned. The window stayed open overnight because Chris did not see my question (see below). |
 | `logs/view-20261021-084010.log` | 48 s | 188 | 0 | 0 | 0 | Hand test |
 | `logs/view-20261021-084621.log` | 43 s | 167 | 0 | 0 | 498 | Hot-corner check. The port opened partway through a frame, and the parser skipped to the next header. |
+| `logs/view-20261021-085822.log` | 50 s | 196 | 0 | 0 | 0 | Fixed colour range, see below |
 
-Over all three runs, 8 of 170,848 frames failed the checksum (0.005%). Polls ran at 5,184–5,290/s, and no poll filled the 62-byte buffer.
+Over all four runs, 8 of 171,044 frames failed the checksum (0.005%). Polls ran at 5,175–5,290/s, and no poll filled the 62-byte buffer.
 
 **Hand test**, in Chris's words: "Tracking good. Up is up wrt the module, left to right movement is left to right on display, so anti-mirror." That is with column 1 drawn on the right, as the GY manual says.
 
@@ -49,11 +50,14 @@ Over all three runs, 8 of 170,848 frames failed the checksum (0.005%). Polls ran
 **Noise on a uniform scene.** Against the ceiling, the image looked "much more random". By default the colour scale is stretched to each frame's own min..max, so on a uniform scene ordinary sensor noise fills the whole colour range. At Chris's request I added a fixed-range option (below). The viewer does not log per-frame min/max, so the spread on the ceiling was not measured.
 
 ## Beyond the brief
-- **Fixed colour range** (Chris asked for it). Tick "fixed range" in the window and set from/to in °C, or start with `--fixed LO HI`. Auto range stays the default. Values outside the range clamp to the end colours. Each change is logged. Tested offline with `test_view.py` and on the replay (`logs/view-replay-20261021-085203.log`). It was not run on live hardware.
+- **Fixed colour range** (Chris asked for it). Tick "fixed range" in the window and set from/to in °C, or start with `--fixed LO HI`. Auto range stays the default. Values outside the range clamp to the end colours. Each change is logged.
+  - Live run `logs/view-20261021-085822.log` (`--fixed 20 35`, 50 s): 196 good frames, 0 checksum fail, 0 full polls. During the run Chris swept "from" between 12 and 24 °C and "to" between 15 and 35 °C, toggled auto/fixed 15 times, and finished on 20–30 °C. Chris's verdict: "fixed range is good, keep auto default."
+  - **Minimum 1 °C gap** (Chris's request after that run). If changing "from" brings it within 1 °C of "to", or past it, "to" is pushed to 1 °C above "from". If changing "to" brings it within 1 °C of "from", or below it, "from" is pushed to 1 °C below "to". The spin box bounds leave room for the push: "from" runs −40 to 299 °C and "to" runs −39 to 300 °C (the GY manual's range). `--fixed` refuses a gap under 1 °C or values outside −40..300 °C. Tested in `test_view.py` by driving the real spin boxes, and on the replay (`logs/view-replay-20261021-090310.log`, `--fixed 20 21`). The gap rule has not been run on live hardware.
+  - Each spin box step writes a log line (72 lines in the 50 s run). If the viewer is kept, it should log the setting only once adjusting stops.
 - **`--replay FILE.bin`** plays a saved capture at ~6,000 B/s, looping, with no port. Replay logs are named `view-replay-*.log`, so they are never confused with hardware runs.
 - **`--seconds N --snapshot PNG`** closes the window after N seconds and saves a screenshot. Used for the offscreen checks.
 - `capture.py` also reads the serial number (GET_SER_NUM, a safe read) and saves the raw stream to `.bin` next to its log.
-- Offline tests: `test_gyframe.py` (parser, resync, checksum, signed values) and `test_view.py` (cell layout, corners, fixed/auto scale). Run them with `.venv/bin/python -m pytest spikes/gy_display -q` (9 pass).
+- Offline tests: `test_gyframe.py` (parser, resync, checksum, signed values) and `test_view.py` (cell layout, corners, fixed/auto scale, the 1 °C gap). Run them with `.venv/bin/python -m pytest spikes/gy_display -q` (24 pass).
 
 ## What the package lacked
 Nothing on the USB-ISS side. `version`, `serial_number`, `build_io_serial`, `set_mode` and `serial_io` were enough, unchanged. I built in the spike:

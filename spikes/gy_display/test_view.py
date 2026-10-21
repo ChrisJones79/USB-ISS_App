@@ -13,7 +13,7 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from gyframe import COLS, PIXELS, ROWS, Frame  # noqa: E402
-from view import CELL, Heatmap, colour  # noqa: E402
+from view import CELL, Heatmap, PollWorker, Window, colour  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -69,6 +69,63 @@ def test_fixed_range_clamps_and_auto_is_default(heat):
     assert cell(img, 0, 0) == colour(0.25).name()
     px[1] = 30.0
     assert cell(render(heat, px), 0, 0) == colour(0.5).name()
+
+
+@pytest.fixture
+def win(heat):  # heat: makes sure the QApplication exists
+    w = Window(PollWorker(lambda msg: None), lambda msg: None)  # stub log: tests write no log files
+    w.fixed_box.setChecked(True)
+    w.lo_spin.setValue(20.0)
+    w.hi_spin.setValue(30.0)
+    return w
+
+
+def rng(w):
+    return w.lo_spin.value(), w.hi_spin.value()
+
+
+def test_scale_defaults_to_auto(heat):
+    w = Window(PollWorker(lambda msg: None), lambda msg: None)
+    assert not w.fixed_box.isChecked() and w.heat.fixed is None
+
+
+@pytest.mark.parametrize("new_lo, want", [
+    (25.0, (25.0, 30.0)),  # gap still >= 1: 'to' untouched
+    (29.0, (29.0, 30.0)),  # exactly 1: untouched
+    (29.5, (29.5, 30.5)),  # too close: 'to' pushed to 1 above
+    (30.0, (30.0, 31.0)),
+    (40.0, (40.0, 41.0)),  # past 'to': pushed to 1 above
+    (299.0, (299.0, 300.0)),  # top of the range
+])
+def test_raising_from_pushes_to_up(win, new_lo, want):
+    win.lo_spin.setValue(new_lo)
+    assert rng(win) == want and win.heat.fixed == want
+
+
+@pytest.mark.parametrize("new_hi, want", [
+    (25.0, (20.0, 25.0)),
+    (21.0, (20.0, 21.0)),
+    (20.5, (19.5, 20.5)),  # too close: 'from' pushed to 1 below
+    (20.0, (19.0, 20.0)),
+    (10.0, (9.0, 10.0)),  # past 'from': pushed to 1 below
+    (-39.0, (-40.0, -39.0)),  # bottom of the range
+])
+def test_lowering_to_pushes_from_down(win, new_hi, want):
+    win.hi_spin.setValue(new_hi)
+    assert rng(win) == want and win.heat.fixed == want
+
+
+def test_spin_bounds_leave_room_for_the_push(win):
+    win.lo_spin.setValue(1000.0)  # clamps to 299, 'to' goes to 300
+    assert rng(win) == (299.0, 300.0)
+    win.hi_spin.setValue(-1000.0)  # clamps to -39, 'from' goes to -40
+    assert rng(win) == (-40.0, -39.0)
+
+
+def test_one_decimal_steps_do_not_trip_on_float_noise(win):
+    win.lo_spin.setValue(20.1)
+    win.hi_spin.setValue(21.1)  # 21.1 - 20.1 is 0.99999... in floats; still a 1.0 gap
+    assert rng(win) == (20.1, 21.1)
 
 
 @pytest.mark.parametrize("i, x, y", [(0, 31, 0), (31, 0, 0), (736, 31, 23), (767, 0, 23)])
